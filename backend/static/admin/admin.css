@@ -307,6 +307,32 @@ body, #container, #main, #content { background: var(--canvas) !important; color:
 #content input::placeholder, #content textarea::placeholder { color: var(--muted) !important; opacity: 1; }
 #content .related-widget-wrapper a, #content .selector-available a, #content .selector-chosen a { filter: grayscale(1) contrast(1.2); }
 #content .related-widget-wrapper .add-related, #content .related-widget-wrapper .change-related, #content .related-widget-wrapper .delete-related, #content .related-widget-wrapper .view-related { opacity: .85; }
+body.login .login-visual, body.login .login-visual h2, body.login .login-visual p, body.login .login-visual span { color: #fff !important; }
+body.login .login-visual__number { color: #fff !important; }
+body.login .field-label-row a { display: inline-block; color: var(--ink) !important; font-size: 12px; font-weight: 750; }
+#content .login-page .login-visual, #content .login-page .login-visual h2, #content .login-page .login-visual p, #content .login-page .login-visual span, #content .login-page .login-visual__number { color: #fff !important; }
+#content .login-page .login-reset { display: block; margin-top: 17px; color: var(--muted) !important; font-size: 12px; font-weight: 650; text-align: center; text-decoration: none; }
+#content .login-page .login-reset span { color: var(--ink) !important; text-decoration: underline; text-underline-offset: 3px; }
+#content .password-reset-page { display: grid; place-items: center; min-height: 100vh; padding: 28px; box-sizing: border-box; background: var(--canvas); }
+#content .password-reset-card { width: min(460px, 100%); box-sizing: border-box; padding: 38px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+#content .password-reset-card h1 { margin: 0 0 12px; color: var(--ink) !important; font-size: 30px; }
+#content .password-reset-card p:not(.eyebrow) { margin: 0 0 22px; color: var(--muted) !important; line-height: 1.6; }
+#content .password-reset-card label { display: block; margin: 16px 0 7px; color: var(--ink) !important; font-weight: 700; }
+#content .password-reset-card input { width: 100%; min-height: 44px; box-sizing: border-box; }
+#content .password-reset-card .login-submit { width: 100%; margin-top: 22px; box-sizing: border-box; text-align: center; text-decoration: none; }
+body.password-reset-page-body #main, body.password-reset-page-body #content, body.password-reset-page-body #content-main { margin: 0 !important; padding: 0 !important; min-height: 100vh; }
+.password-reset-page { display: grid; place-items: center; min-height: 100vh; box-sizing: border-box; padding: 32px 18px; background: radial-gradient(circle at 12% 12%, rgba(0,0,0,.06), transparent 30%), radial-gradient(circle at 90% 88%, rgba(0,0,0,.04), transparent 32%), var(--canvas); }
+.password-reset-card { width: min(560px, 100%); overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.password-reset-card__header { display: flex; align-items: center; justify-content: space-between; padding: 22px 26px; background: #000; }
+.password-reset-card__body { padding: 40px 42px 34px; }
+.password-reset-card__body h1 { margin: 0 0 12px; color: var(--ink) !important; font-size: 32px; letter-spacing: -.05em; }
+.password-reset-card__body p:not(.eyebrow) { margin: 0 0 22px; color: var(--muted) !important; line-height: 1.6; }
+.password-reset-card__body label { display: block; margin: 16px 0 7px; color: var(--ink) !important; font-weight: 750; }
+.password-reset-card__body input { width: 100%; min-height: 44px; box-sizing: border-box; }
+.password-reset-card__body .login-submit { width: 100%; margin-top: 22px; box-sizing: border-box; text-align: center; text-decoration: none; }
+.password-reset-card__footer { margin: 0; padding: 14px 24px; border-top: 1px solid var(--line); color: var(--muted) !important; text-align: center; font-size: 11px; }
+html.dark .password-reset-page, body.dark-mode .password-reset-page { background: radial-gradient(circle at 12% 12%, rgba(255,255,255,.06), transparent 30%), radial-gradient(circle at 90% 88%, rgba(255,255,255,.04), transparent 32%), var(--canvas); }
+@media (max-width: 600px) { .password-reset-card__body { padding: 32px 24px 28px; } .password-reset-card__header { padding: 18px 20px; } }
 @media (max-width: 760px) { #changelist { display: block !important; } #changelist > #changelist-filter { border-left: 0; border-top: 1px solid var(--line); } body.sidebar-collapsed #content { margin-left: 0 !important; } }
 
 /* Shared changelist card: one fluid list surface with an optional filter rail. */
@@ -330,6 +356,19 @@ body, #container, #main, #content { background: var(--canvas) !important; color:
 #nav-sidebar .current-app, #nav-sidebar .current-model, #nav-sidebar tr.current-app, #nav-sidebar tr.current-model,
 #nav-sidebar .current-app a, #nav-sidebar .current-model a { color: var(--ink) !important; background: var(--surface-soft) !important; }
 #nav-sidebar .addlink, #nav-sidebar .addlink::before { color: var(--ink) !important; filter: grayscale(1) contrast(1.25); }
+#nav-sidebar .module caption, #nav-sidebar .module h2, #nav-sidebar .module caption a, #nav-sidebar .module h2 a { display: block; color: var(--ink) !important; background: var(--surface-soft) !important; opacity: 1 !important; }
+#nav-sidebar .module caption { border-radius: 7px; }
+#nav-sidebar .module table, #nav-sidebar .module tbody, #nav-sidebar .module tr, #nav-sidebar .module tr:nth-child(odd), #nav-sidebar .module tr:nth-child(even), #nav-sidebar .module th, #nav-sidebar .module td { color: var(--ink) !important; background: var(--surface) !important; border-color: var(--line) !important; }
+#nav-sidebar .module tr:hover, #nav-sidebar .module tr.current-app, #nav-sidebar .module tr.current-model { background: var(--surface-soft) !important; }
+#nav-sidebar .module th a, #nav-sidebar .module td a, #nav-sidebar .module th a:visited, #nav-sidebar .module td a:visited { color: var(--ink) !important; background: transparent !important; opacity: 1 !important; }
+#nav-sidebar .module th a:hover, #nav-sidebar .module td a:hover { color: var(--muted) !important; background: transparent !important; }
+
+/* Explicit sidebar control in the admin header. */
+.brand-cluster { display: flex; align-items: center; gap: 14px; }
+.sidebar-toggle { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(255,255,255,.45); border-radius: 9px; color: #fff; background: transparent; font-size: 16px; line-height: 1; cursor: pointer; }
+.sidebar-toggle:hover { background: rgba(255,255,255,.12); }
+.sidebar-toggle.is-collapsed span { transform: rotate(180deg); }
+.toggle-nav-sidebar { display: none !important; }
 
 @media (max-width: 900px) {
   #changelist:has(#changelist-filter) { padding-right: 0 !important; }

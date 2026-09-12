@@ -15,10 +15,13 @@
 {% endblock %}
 
 {% block branding %}
-  <a href="{% url 'admin:index' %}" class="brand-mark" aria-label="Mecard Studio admin home">
-    <span class="brand-mark__icon">M</span>
-    <span>Mecard <em>Studio</em></span>
-  </a>
+  <div class="brand-cluster">
+    <button type="button" class="sidebar-toggle" data-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true"><span>☰</span></button>
+    <a href="{% url 'admin:index' %}" class="brand-mark" aria-label="Mecard Studio admin home">
+      <span class="brand-mark__icon">M</span>
+      <span>Mecard <em>Studio</em></span>
+    </a>
+  </div>
 {% endblock %}
 
 {% block nav-global %}

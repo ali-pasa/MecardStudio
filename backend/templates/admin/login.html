@@ -22,6 +22,7 @@
 {% block nav-sidebar %}{% endblock %}
 
 {% block content %}
+{% url 'admin:password_reset' as password_reset_url %}
 <main class="login-page">
   <div class="login-ambient login-ambient--one"></div>
   <div class="login-ambient login-ambient--two"></div>
@@ -63,13 +64,13 @@
           <div class="field-group">
             <div class="field-label-row">
               <label for="id_password">Password</label>
-              {% if password_reset_url %}<a href="{{ password_reset_url }}">Forgot password?</a>{% endif %}
             </div>
             {{ form.password }}
           </div>
           <input type="hidden" name="next" value="{{ next }}">
           <button type="submit" class="login-submit">Sign in <span aria-hidden="true">→</span></button>
         </form>
+        <a class="login-reset" href="{% url 'admin-password-reset' %}">Forgot password? <span>Reset it here →</span></a>
       </div>
     </div>
     <p class="login-footer">Protected admin area · Mecard Studio</p>
