@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="dashboard-shell">
+  <div class="dashboard-heading">
+    <div>
+      <p class="eyebrow">Overview</p>
+      <h1>Good to see you, {{ user.first_name|default:user.username }}.</h1>
+      <p class="page-subtitle">Manage your studio, people and published cards.</p>
+    </div>
+    <a class="primary-action" href="{% url 'admin:api_user_add' %}"><span>＋</span> Add user</a>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card"><span class="stat-card__label">User master</span><strong>Ready</strong><span class="stat-card__hint">Search, filter and manage access</span></div>
+    <div class="stat-card"><span class="stat-card__label">Your role</span><strong>{{ user.role|default:'Admin' }}</strong><span class="stat-card__hint">Workspace permissions</span></div>
+    <div class="stat-card"><span class="stat-card__label">Last sign in</span><strong>{{ user.last_login|date:'M d'|default:'Today' }}</strong><span class="stat-card__hint">Account activity</span></div>
+  </div>
+
+  <div class="dashboard-grid">
+    <section class="module-card module-card--wide">
+      <div class="module-card__heading"><div><p class="eyebrow">Administration</p><h2>Workspace modules</h2></div></div>
+      {% for app in app_list %}
+        <div class="app-module">
+          <div class="app-module__title"><span class="module-icon">{{ app.name|slice:':1' }}</span><h3>{{ app.name }}</h3></div>
+          <div class="app-module__rows">
+            {% for model in app.models %}
+              <div class="model-row"><a href="{{ model.admin_url }}">{{ model.name }}</a><span>{% if model.add_url %}<a class="row-action" href="{{ model.add_url }}">Add</a>{% endif %}{% if model.admin_url %}<a class="row-action" href="{{ model.admin_url }}">Manage</a>{% endif %}</span></div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+    <aside class="module-card activity-card"><div class="module-card__heading"><div><p class="eyebrow">Activity</p><h2>Recent actions</h2></div></div>{% load log %}{% get_admin_log 6 as admin_log for_user user %}{% if not admin_log %}<p class="empty-state">No activity yet. Changes you make will appear here.</p>{% else %}<ul class="activity-list">{% for entry in admin_log %}<li><span class="activity-dot"></span><div><strong>{{ entry.object_repr|truncatechars:34 }}</strong><small>{{ entry.action_time|timesince }} ago</small></div></li>{% endfor %}</ul>{% endif %}</aside>
+  </div>
+</div>
+{% endblock %}

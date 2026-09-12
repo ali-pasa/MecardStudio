@@ -1,0 +1,337 @@
+:root {
+  --ink: #122334;
+  --muted: #657586;
+  --line: #e4eaf0;
+  --surface: #ffffff;
+  --surface-soft: #f7f9fb;
+  --canvas: #f2f6f9;
+  --brand: #1f6f8b;
+  --brand-deep: #15526a;
+  --accent: #f4b942;
+  --shadow: 0 20px 55px rgba(25, 55, 75, .10);
+}
+
+html.dark, body.dark-mode {
+  --ink: #edf3f7;
+  --muted: #9caebb;
+  --line: #293b49;
+  --surface: #14232d;
+  --surface-soft: #1a2b37;
+  --canvas: #0d181f;
+  --brand: #3b8aa8;
+  --brand-deep: #286e89;
+  --shadow: 0 20px 55px rgba(0, 0, 0, .25);
+}
+
+html, body { min-height: 100%; }
+body { background: var(--canvas) !important; color: var(--ink) !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
+a { color: var(--brand); }
+#header { min-height: 72px; padding: 0 4vw; background: var(--brand) !important; color: #fff !important; display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; }
+#branding { float: none; padding: 0; }
+#branding h1, #branding h1 a { color: #fff !important; }
+#user-tools { display: none; }
+.brand-mark { display: inline-flex; align-items: center; gap: 10px; color: #fff !important; text-decoration: none; font-size: 22px; font-weight: 750; letter-spacing: -.04em; }
+.brand-mark em { color: var(--accent); font-style: normal; }
+.brand-mark__icon { display: grid; place-items: center; width: 32px; height: 32px; border: 2px solid rgba(255,255,255,.7); border-radius: 10px; font-size: 17px; font-weight: 800; }
+.admin-topbar__meta { display: flex; align-items: center; gap: 14px; color: rgba(255,255,255,.86); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.admin-topbar__user { font-weight: 700; color: #fff; }
+.admin-topbar__eyebrow { opacity: .7; }
+.theme-toggle { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.4); border-radius: 50%; color: #fff; background: transparent; cursor: pointer; font-size: 16px; }
+#content { padding: 0 !important; }
+#content-main { float: none; width: auto; }
+.dashboard-shell { max-width: 1420px; margin: 0 auto; padding: 52px 4vw 70px; }
+.dashboard-heading { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 34px; }
+.eyebrow { margin: 0 0 8px; color: var(--brand); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .13em; }
+h1, h2, h3, p { color: var(--ink); }
+.dashboard-heading h1 { max-width: 720px; margin: 0; font-size: clamp(30px, 4vw, 48px); line-height: 1.08; letter-spacing: -.055em; }
+.page-subtitle, .login-subtitle { margin: 12px 0 0; color: var(--muted); font-size: 15px; }
+.primary-action, .login-submit { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 0; border-radius: 9px; padding: 13px 18px; color: #fff !important; background: var(--brand-deep); font-weight: 750; text-decoration: none; box-shadow: 0 8px 18px rgba(21,82,106,.18); cursor: pointer; }
+.primary-action span { font-size: 20px; line-height: 0; }
+.stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card, .module-card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.stat-card { padding: 22px 24px; }
+.stat-card__label, .stat-card__hint { display: block; color: var(--muted); font-size: 12px; }
+.stat-card strong { display: block; margin: 10px 0 6px; color: var(--ink); font-size: 25px; letter-spacing: -.03em; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, .8fr); gap: 24px; align-items: start; }
+.module-card__heading { padding: 23px 25px 19px; border-bottom: 1px solid var(--line); }
+.module-card h2 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
+.app-module { padding: 0 25px; }
+.app-module__title { display: flex; align-items: center; gap: 11px; padding: 20px 0 10px; }
+.app-module__title h3 { margin: 0; font-size: 14px; }
+.module-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; color: var(--brand-deep); background: rgba(31,111,139,.12); font-size: 12px; font-weight: 800; }
+.model-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+.model-row a:first-child { color: var(--ink); font-size: 14px; font-weight: 650; text-decoration: none; }
+.row-action { margin-left: 14px; color: var(--brand); font-size: 12px; font-weight: 700; text-decoration: none; }
+.activity-card { min-height: 230px; }
+.empty-state { margin: 22px 25px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.activity-list { margin: 0; padding: 5px 25px 20px; list-style: none; }
+.activity-list li { display: flex; gap: 11px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.activity-list strong, .activity-list small { display: block; color: var(--ink); font-size: 12px; }
+.activity-list small { margin-top: 4px; color: var(--muted); }
+.activity-dot { flex: 0 0 auto; width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--accent); }
+
+/* Django list and form pages inherit the same surface language. */
+#changelist, .module, .aligned, .submit-row, .form-row, .results, .paginator, .filtered { border-color: var(--line) !important; background: var(--surface) !important; color: var(--ink) !important; }
+#changelist { margin: 38px 4vw; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+#changelist-form, #changelist-filter { background: var(--surface) !important; }
+#changelist-filter { border-left: 1px solid var(--line); }
+#changelist-filter h2, #changelist-filter h3, .module caption, .module h2 { background: var(--brand) !important; color: #fff !important; }
+#changelist table thead th, #changelist table thead th a { background: var(--surface-soft) !important; color: var(--muted) !important; }
+#changelist table tbody tr:hover { background: var(--surface-soft) !important; }
+#changelist table td, #changelist table th { border-color: var(--line) !important; }
+input, textarea, select, .vTextField, .vURLField, .vIntegerField { box-sizing: border-box; border: 1px solid var(--line) !important; border-radius: 8px !important; background: var(--surface-soft) !important; color: var(--ink) !important; padding: 10px 12px !important; }
+input:focus, textarea:focus, select:focus { border-color: var(--brand) !important; outline: 3px solid rgba(31,111,139,.15) !important; }
+.submit-row input, input[type=submit], .button { border: 0 !important; border-radius: 8px !important; background: var(--brand-deep) !important; color: #fff !important; padding: 11px 17px !important; }
+
+.login-page { position: relative; display: grid; place-items: center; min-height: calc(100vh - 0px); overflow: hidden; background: var(--canvas); }
+.login-card { position: relative; z-index: 1; width: min(440px, calc(100vw - 34px)); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 28px 90px rgba(17,46,63,.15); overflow: hidden; }
+.login-card__header { display: flex; justify-content: space-between; align-items: center; padding: 22px 26px; background: var(--brand); }
+.brand-mark--login { font-size: 20px; }
+.theme-toggle--login { border-color: rgba(255,255,255,.5); }
+.login-card__body { padding: 34px 32px 30px; }
+.login-card h1 { margin: 0; font-size: 32px; letter-spacing: -.05em; }
+.login-subtitle { margin-bottom: 26px; }
+.field-group { margin: 18px 0; }
+.field-group label { display: block; margin-bottom: 8px; color: var(--ink); font-size: 13px; font-weight: 700; }
+.field-label-row { display: flex; justify-content: space-between; align-items: center; }
+.field-label-row a { font-size: 12px; font-weight: 700; }
+.field-group input { width: 100%; min-height: 45px; }
+.login-submit { width: 100%; margin-top: 10px; padding: 13px 18px; }
+.form-error { margin: 14px 0; border: 1px solid #e6a6a6; border-radius: 8px; padding: 10px 12px; color: #9a3030; background: #fff1f1; font-size: 12px; }
+.login-footer { margin: 0; padding: 16px 24px; border-top: 1px solid var(--line); color: var(--muted); text-align: center; font-size: 11px; }
+.login-ambient { position: absolute; width: 360px; height: 360px; border-radius: 50%; filter: blur(2px); opacity: .35; background: rgba(31,111,139,.18); }
+.login-ambient--one { top: -150px; left: -100px; }.login-ambient--two { right: -120px; bottom: -150px; background: rgba(244,185,66,.2); }
+@media (max-width: 800px) { .dashboard-grid { grid-template-columns: 1fr; } .dashboard-heading { align-items: start; flex-direction: column; } .stat-grid { grid-template-columns: 1fr; } #header { padding: 0 20px; } .admin-topbar__eyebrow { display: none; } }
+
+/* Modern admin shell overrides for Django's built-in navigation. */
+#container { min-height: 100vh; background: var(--canvas) !important; }
+#main { display: block; min-height: calc(100vh - 72px); background: var(--canvas) !important; }
+#nav-sidebar { position: fixed; z-index: 10; top: 72px; bottom: 0; left: 0; width: 244px; box-sizing: border-box; padding: 18px 12px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface) !important; }
+#nav-sidebar input { width: 100%; margin-bottom: 18px; background: var(--surface-soft) !important; }
+#nav-sidebar .module { border: 0 !important; box-shadow: none !important; background: transparent !important; }
+#nav-sidebar .module caption, #nav-sidebar .module h2 { margin: 11px 0 7px; border-radius: 7px; padding: 9px 11px; background: transparent !important; color: var(--muted) !important; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+#nav-sidebar .module table { width: 100%; background: transparent !important; }
+#nav-sidebar .module tr { border-radius: 8px; }
+#nav-sidebar .module tr.current-app, #nav-sidebar .module tr:hover { background: rgba(31,111,139,.12) !important; }
+#nav-sidebar .module th, #nav-sidebar .module td { border: 0 !important; background: transparent !important; }
+#nav-sidebar .module th a, #nav-sidebar .module td a { display: block; padding: 9px 10px; color: var(--ink) !important; font-size: 13px; text-decoration: none; }
+#nav-sidebar .addlink { color: var(--brand) !important; font-weight: 700; }
+.breadcrumbs { box-sizing: border-box; height: 48px; margin: 0 !important; padding: 14px 30px !important; border-bottom: 1px solid var(--line); background: var(--surface) !important; color: var(--muted) !important; font-size: 13px; }
+#content { margin-left: 244px !important; min-height: calc(100vh - 120px); padding: 0 !important; }
+#content-main { padding: 30px 34px 60px; }
+#content h1 { margin: 0 0 22px; font-size: 27px; letter-spacing: -.045em; }
+#content .object-tools { margin-top: -4px; }
+#content .object-tools a { border-radius: 8px; background: var(--brand-deep) !important; padding: 10px 14px; font-weight: 750; }
+#changelist { margin: 0 !important; border-radius: 15px; }
+#changelist .changelist-form-container { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0; }
+#changelist .changelist-form-container > #changelist-filter { grid-column: 2; grid-row: 1; }
+#changelist .changelist-form-container > #changelist-form { grid-column: 1; grid-row: 1; min-width: 0; }
+#changelist .actions { padding: 12px 14px; background: var(--surface-soft) !important; border-bottom: 1px solid var(--line); }
+#changelist .actions select { min-width: 170px; }
+#changelist-search { padding: 18px 14px !important; background: var(--surface) !important; border-bottom: 1px solid var(--line); }
+#changelist-search input[type=submit] { min-height: 40px; margin-left: 7px; }
+#changelist-filter { min-height: 100%; padding: 0 !important; }
+#changelist-filter h2 { margin: 0 !important; border-radius: 0 !important; padding: 15px 18px !important; font-size: 11px !important; letter-spacing: .12em; text-transform: uppercase; }
+#changelist-filter h3 { margin: 18px 18px 7px !important; padding: 0 !important; background: transparent !important; color: var(--ink) !important; font-size: 12px !important; }
+#changelist-filter ul { margin: 0 18px 18px !important; padding: 0 !important; }
+#changelist-filter li { padding: 4px 0 !important; color: var(--muted); font-size: 12px; }
+#changelist-filter li.selected a { color: var(--brand) !important; font-weight: 800; }
+#result_list thead th { padding: 12px 13px !important; }
+#result_list tbody td, #result_list tbody th { padding: 14px 13px !important; }
+.paginator { border-top: 1px solid var(--line) !important; padding: 14px !important; }
+
+/* The login page is intentionally independent from the admin shell. */
+body.login #header, body.login .breadcrumbs, body.login #nav-sidebar { display: none !important; }
+body.login #main, body.login #content, body.login #content-main { margin: 0 !important; padding: 0 !important; min-height: 100vh; }
+body.login #content { width: 100% !important; }
+.login-page { min-height: 100vh; background: radial-gradient(circle at 16% 15%, rgba(57,146,177,.17), transparent 34%), radial-gradient(circle at 92% 88%, rgba(244,185,66,.12), transparent 30%), var(--canvas); }
+.login-card { width: min(960px, calc(100vw - 44px)); border-color: rgba(103,160,181,.26); background: var(--surface); }
+.login-card__header { padding: 21px 28px; }
+.login-layout { display: grid; grid-template-columns: .82fr 1fr; }
+.login-visual { position: relative; min-height: 480px; overflow: hidden; padding: 34px 32px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; background: linear-gradient(145deg, #195d76 0%, #123a4c 58%, #0e2935 100%); }
+.login-visual__kicker { position: relative; z-index: 1; color: #a8d9e8; font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.login-visual h2 { position: relative; z-index: 1; max-width: 290px; margin: 0; color: #fff; font-size: 34px; line-height: 1.05; letter-spacing: -.06em; }
+.login-visual p:not(.login-visual__number) { position: relative; z-index: 1; max-width: 280px; margin: 18px 0 0; color: rgba(255,255,255,.68); font-size: 13px; line-height: 1.6; }
+.login-visual__number { position: relative; z-index: 1; margin: 0 0 15px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .15em; }
+.login-visual__signature { position: relative; z-index: 1; display: flex; align-items: center; gap: 9px; color: rgba(255,255,255,.65); font-size: 11px; }
+.login-visual__signature span { width: 24px; height: 1px; background: var(--accent); }
+.login-visual__orb { position: absolute; border: 1px solid rgba(168,217,232,.22); border-radius: 50%; }
+.login-visual__orb--one { width: 310px; height: 310px; right: -130px; top: 88px; box-shadow: 0 0 0 24px rgba(168,217,232,.035), 0 0 0 48px rgba(168,217,232,.025); }
+.login-visual__orb--two { width: 160px; height: 160px; right: 40px; bottom: -68px; background: rgba(244,185,66,.12); }
+.login-card__body { padding: 48px 48px 40px; }
+.login-card__body h1 { font-size: 36px; }
+.login-footer { padding: 14px 24px; }
+@media (max-width: 760px) { #nav-sidebar { display: none; } #content { margin-left: 0 !important; } #content-main { padding: 24px 16px 50px; } #changelist .changelist-form-container { display: block; } #changelist-filter { border-top: 1px solid var(--line); border-left: 0; } .login-layout { grid-template-columns: 1fr; } .login-visual { display: none; } .login-card__body { padding: 34px 26px 28px; } .login-card { width: min(440px, calc(100vw - 28px)); } }
+
+/* Account menu */
+.profile-menu { position: relative; }
+.profile-menu summary { list-style: none; }
+.profile-menu summary::-webkit-details-marker { display: none; }
+.profile-menu__trigger { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.profile-menu__avatar { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.5); border-radius: 50%; color: #fff; background: rgba(255,255,255,.12); font-size: 12px; font-weight: 800; }
+.profile-menu__avatar--large { flex: 0 0 auto; width: 38px; height: 38px; color: var(--brand-deep); border: 0; background: rgba(31,111,139,.13); }
+.profile-menu__chevron { color: rgba(255,255,255,.7); font-size: 14px; }
+.profile-menu__dropdown { position: absolute; z-index: 50; top: calc(100% + 13px); right: 0; width: 225px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 18px 45px rgba(0,0,0,.22); }
+.profile-menu__identity { display: flex; align-items: center; gap: 10px; padding: 15px; border-bottom: 1px solid var(--line); }
+.profile-menu__identity strong, .profile-menu__identity small { display: block; color: var(--ink); }
+.profile-menu__identity strong { max-width: 150px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-menu__identity small { max-width: 150px; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-menu__dropdown a, .profile-menu__dropdown button { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 11px 15px; border: 0; color: var(--ink) !important; background: transparent; font: inherit; font-size: 12px; text-align: left; text-decoration: none; cursor: pointer; }
+.profile-menu__dropdown a:hover, .profile-menu__dropdown button:hover { background: var(--surface-soft); }
+.profile-menu__dropdown a span, .profile-menu__dropdown button span { width: 16px; color: var(--brand); font-size: 16px; text-align: center; }
+.profile-menu__divider { height: 1px; margin: 3px 15px; background: var(--line); }
+
+/* User list: keep search, result table and filters in predictable columns. */
+#changelist .changelist-form-container { align-items: start; }
+#changelist-form { width: 100% !important; min-width: 0 !important; }
+#changelist-search { float: none !important; width: 100% !important; box-sizing: border-box; }
+#changelist-search label { display: inline-flex; align-items: center; gap: 6px; }
+#changelist-search input[type=text] { width: min(420px, 62%) !important; min-height: 40px; }
+#toolbar { float: none !important; clear: both; width: auto !important; min-height: 0; padding: 16px 14px !important; background: var(--surface) !important; border-bottom: 1px solid var(--line); }
+#toolbar form { display: flex; align-items: center; gap: 8px; }
+#toolbar input[type=submit] { min-height: 40px; }
+#result_list { width: 100% !important; table-layout: auto; }
+#result_list th, #result_list td { white-space: nowrap; }
+#result_list th:nth-child(2), #result_list td:nth-child(2) { min-width: 120px; }
+#result_list th:nth-child(3), #result_list td:nth-child(3) { min-width: 120px; }
+
+/* Add/edit forms: consistent two-column labels and spacious controls. */
+#content-main > form > .module, #content-main > .module { overflow: hidden; border: 1px solid var(--line) !important; border-radius: 14px !important; box-shadow: var(--shadow); }
+#content-main fieldset.module { margin-bottom: 18px; }
+#content-main fieldset.module h2 { padding: 14px 22px !important; background: var(--brand) !important; font-size: 12px !important; letter-spacing: .07em; text-transform: uppercase; }
+#content-main .form-row { display: flex; align-items: flex-start; gap: 25px; padding: 17px 24px !important; border-bottom: 1px solid var(--line) !important; }
+#content-main .form-row:last-child { border-bottom: 0 !important; }
+#content-main .form-row > label { flex: 0 0 175px; padding-top: 10px; color: var(--ink); font-size: 13px; font-weight: 700; }
+#content-main .form-row > div { flex: 1; min-width: 0; }
+#content-main .form-row input[type=text], #content-main .form-row input[type=password], #content-main .form-row input[type=email], #content-main .form-row select, #content-main .form-row textarea { width: 100%; max-width: 620px; min-height: 42px; }
+#content-main .form-row .checkbox-row { padding-top: 9px; }
+#content-main .form-row p.help, #content-main .form-row ul.help { max-width: 620px; margin: 7px 0 0 !important; color: var(--muted); font-size: 11px; line-height: 1.5; }
+#content-main .submit-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 !important; padding: 18px 24px !important; border: 1px solid var(--line) !important; border-radius: 14px; background: var(--surface) !important; box-shadow: var(--shadow); }
+#content-main .submit-row .deletelink { order: -1; margin-right: auto; color: #d46a6a; }
+#content-main .submit-row input { min-height: 42px; }
+@media (max-width: 680px) { #content-main .form-row { display: block; } #content-main .form-row > label { display: block; padding: 0 0 7px; } #content-main .form-row p.help { margin-left: 0 !important; } #changelist-search input[type=text] { width: 60% !important; } .admin-topbar__user { display: none; } }
+
+/* Final changelist sizing reset: Django's stock floats otherwise create a narrow middle column. */
+#content-main { position: relative; }
+#content-main > h1 { padding-right: 150px; }
+#content-main > .object-tools { position: absolute; top: 29px; right: 34px; z-index: 2; margin: 0 !important; }
+#changelist { display: block !important; width: 100% !important; max-width: none !important; box-sizing: border-box; }
+#changelist > #toolbar { display: block !important; float: none !important; clear: both !important; width: 100% !important; box-sizing: border-box; margin: 0 !important; }
+#changelist > .actions { display: flex; align-items: center; gap: 8px; float: none !important; clear: both !important; width: 100% !important; box-sizing: border-box; }
+#changelist .changelist-form-container { display: flex !important; flex-direction: row !important; align-items: stretch !important; width: 100% !important; gap: 0 !important; }
+#changelist .changelist-form-container > #changelist-form { flex: 1 1 auto !important; width: auto !important; min-width: 0 !important; }
+#changelist .changelist-form-container > #changelist-filter { flex: 0 0 280px !important; width: 280px !important; min-width: 280px !important; box-sizing: border-box; }
+#changelist-search { display: flex !important; align-items: center; gap: 8px; float: none !important; width: 100% !important; box-sizing: border-box; margin: 0 !important; }
+#changelist-search input[type=text] { flex: 1 1 auto; width: auto !important; max-width: none !important; }
+#changelist-search input[type=submit] { flex: 0 0 auto; margin: 0 !important; }
+#changelist-form .results { width: 100% !important; overflow-x: auto; }
+#result_list { width: 100% !important; min-width: 760px; }
+@media (max-width: 760px) { #content-main > .object-tools { position: static; margin: -8px 0 20px !important; } #content-main > h1 { padding-right: 0; } #changelist .changelist-form-container { display: block !important; } #changelist .changelist-form-container > #changelist-filter { width: 100% !important; min-width: 0 !important; } }
+
+/* Actual top-level Django changelist layout. The filter is a sibling of the form. */
+#changelist { display: grid !important; grid-template-columns: minmax(0, 1fr) 280px; grid-template-rows: auto auto auto; align-items: start; width: 100% !important; max-width: none !important; }
+#changelist > #toolbar { grid-column: 1; grid-row: 1; float: none !important; width: 100% !important; min-width: 0; }
+#changelist > .xfull, #changelist > .date-hierarchy { grid-column: 1; grid-row: 2; float: none !important; width: 100% !important; }
+#changelist > #changelist-form { grid-column: 1; grid-row: 3; float: none !important; width: 100% !important; min-width: 0; }
+#changelist > #changelist-filter { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; float: none !important; width: 100% !important; min-width: 0 !important; border-left: 1px solid var(--line); }
+#changelist > .actions { grid-column: 1; grid-row: 3; float: none !important; width: 100% !important; }
+#changelist > #changelist-form > .actions { float: none !important; width: 100% !important; }
+#changelist > #changelist-form > .results, #changelist > #changelist-form > .paginator { width: 100% !important; overflow-x: auto; }
+#changelist .changelist-form-container { display: contents !important; }
+#changelist .changelist-form-container > #changelist-form { display: block !important; width: 100% !important; }
+#changelist .changelist-form-container > #changelist-filter { display: block !important; width: 100% !important; }
+#changelist #changelist-form { grid-column: 1; grid-row: 3; float: none !important; width: 100% !important; min-width: 0; }
+#changelist #changelist-filter { grid-column: 2; grid-row: 1 / span 3; align-self: stretch; float: none !important; width: 100% !important; min-width: 0 !important; }
+#changelist #toolbar { grid-column: 1; grid-row: 1; float: none !important; width: 100% !important; min-width: 0; }
+#changelist .xfull, #changelist .date-hierarchy { grid-column: 1; grid-row: 2; float: none !important; width: 100% !important; }
+
+/* Keep the content at full width when Django's navigation is collapsed. */
+#nav-sidebar { display: block !important; visibility: visible !important; margin-left: 0 !important; transform: translateX(0); opacity: 1; pointer-events: auto; transition: transform .2s ease, opacity .2s ease; }
+body.sidebar-collapsed #nav-sidebar, #nav-sidebar.custom-collapsed { display: none !important; visibility: hidden !important; margin-left: 0 !important; transform: translateX(-105%); opacity: 0; pointer-events: none; }
+body.sidebar-collapsed #content { margin-left: 0 !important; }
+body.sidebar-collapsed #content-main { max-width: none; }
+
+/* Neutral black/white theme: no teal, yellow or green status treatment. */
+:root {
+  --ink: #111111;
+  --muted: #666666;
+  --line: #dedede;
+  --surface: #ffffff;
+  --surface-soft: #f5f5f5;
+  --canvas: #eeeeee;
+  --brand: #111111;
+  --brand-deep: #000000;
+  --accent: #111111;
+  --brand-contrast: #ffffff;
+  --shadow: 0 18px 45px rgba(0,0,0,.09);
+}
+html.dark, body.dark-mode {
+  --ink: #f5f5f5;
+  --muted: #a3a3a3;
+  --line: #333333;
+  --surface: #111111;
+  --surface-soft: #1b1b1b;
+  --canvas: #050505;
+  --brand: #f5f5f5;
+  --brand-deep: #ffffff;
+  --accent: #f5f5f5;
+  --brand-contrast: #111111;
+  --shadow: 0 18px 45px rgba(0,0,0,.34);
+}
+body, #container, #main, #content { background: var(--canvas) !important; color: var(--ink) !important; }
+#header { background: #000 !important; color: #fff !important; }
+.brand-mark, .brand-mark em { color: #fff !important; }
+.brand-mark em { color: #fff !important; }
+.brand-mark__icon { border-color: rgba(255,255,255,.7); }
+.primary-action, .login-submit, #content .object-tools a, .submit-row input, input[type=submit], .button { background: var(--brand-deep) !important; color: var(--brand-contrast) !important; }
+#nav-sidebar .module tr.current-app, #nav-sidebar .module tr:hover { background: var(--surface-soft) !important; }
+#nav-sidebar .module caption, #nav-sidebar .module h2 { color: var(--muted) !important; }
+#changelist-filter h2, #changelist-filter h3, .module caption, .module h2 { background: var(--ink) !important; color: var(--surface) !important; }
+#changelist-filter h3 { background: transparent !important; color: var(--ink) !important; }
+#changelist table thead th, #changelist table thead th a { background: var(--surface-soft) !important; color: var(--muted) !important; }
+#changelist table tbody tr:hover { background: var(--surface-soft) !important; }
+.login-visual { background: linear-gradient(145deg, #222 0%, #0b0b0b 100%); }
+.login-visual__kicker, .login-visual__number, .login-visual__signature span { color: #fff; background-color: transparent; }
+.login-card__header { background: #000 !important; }
+.login-ambient, .login-visual__orb--two { background: rgba(255,255,255,.06); }
+.login-visual__orb { border-color: rgba(255,255,255,.18); }
+.boolean-icon, img[src*="icon-yes"], img[src*="icon-no"] { filter: grayscale(1) contrast(1.25); opacity: .8; }
+.profile-menu__avatar--large { color: var(--ink); background: var(--surface-soft); }
+.module-icon { color: var(--ink); background: var(--surface-soft); }
+.row-action, .row-action:visited, a { color: var(--ink); }
+.row-action:hover, a:hover { color: var(--muted); }
+#content, #content p, #content label, #content h1, #content h2, #content h3, #content th, #content td, #content .help, #content .helptext { color: var(--ink) !important; }
+#content .breadcrumbs, #content .breadcrumbs a { color: var(--ink) !important; }
+#content .form-row > label, #content .form-row label { color: var(--ink) !important; opacity: 1 !important; }
+#content .form-row .help, #content .form-row p.help, #content .form-row ul.help, #content .form-row .helptext { color: var(--muted) !important; opacity: 1 !important; }
+#content input::placeholder, #content textarea::placeholder { color: var(--muted) !important; opacity: 1; }
+#content .related-widget-wrapper a, #content .selector-available a, #content .selector-chosen a { filter: grayscale(1) contrast(1.2); }
+#content .related-widget-wrapper .add-related, #content .related-widget-wrapper .change-related, #content .related-widget-wrapper .delete-related, #content .related-widget-wrapper .view-related { opacity: .85; }
+@media (max-width: 760px) { #changelist { display: block !important; } #changelist > #changelist-filter { border-left: 0; border-top: 1px solid var(--line); } body.sidebar-collapsed #content { margin-left: 0 !important; } }
+
+/* Shared changelist card: one fluid list surface with an optional filter rail. */
+#changelist { position: relative !important; display: block !important; width: 100% !important; max-width: none !important; min-height: 170px; box-sizing: border-box; overflow: hidden; padding-right: 0 !important; }
+#changelist:has(#changelist-filter) { padding-right: 280px !important; }
+#changelist > #toolbar, #changelist > .xfull, #changelist > .date-hierarchy, #changelist > #changelist-form,
+#changelist #toolbar, #changelist .xfull, #changelist .date-hierarchy, #changelist #changelist-form { display: block !important; float: none !important; clear: both !important; width: 100% !important; max-width: none !important; min-width: 0 !important; box-sizing: border-box; grid-column: auto !important; grid-row: auto !important; }
+#changelist .changelist-form-container { display: contents !important; }
+#changelist #changelist-filter { position: absolute !important; top: 0; right: 0; bottom: 0; display: block !important; width: 280px !important; min-width: 280px !important; height: auto !important; box-sizing: border-box; overflow-y: auto; border-left: 1px solid var(--line); border-top: 0; grid-column: auto !important; grid-row: auto !important; }
+#changelist > #toolbar { min-height: 72px; padding: 16px 14px !important; background: var(--surface) !important; border-bottom: 1px solid var(--line); }
+#changelist-search { display: flex !important; align-items: center; gap: 8px; width: 100% !important; margin: 0 !important; padding: 0 !important; background: transparent !important; }
+#changelist-search input[type=text] { flex: 1 1 auto; width: auto !important; max-width: none !important; min-height: 40px; }
+#changelist-search input[type=submit] { flex: 0 0 auto; min-height: 40px; margin: 0 !important; }
+#changelist #changelist-form > .actions { display: flex; align-items: center; gap: 8px; width: 100% !important; box-sizing: border-box; float: none !important; }
+#changelist #changelist-form > .results, #changelist #changelist-form > .paginator { display: block; width: 100% !important; max-width: none !important; overflow-x: auto; }
+#changelist #result_list { width: 100% !important; min-width: 0; }
+#changelist #changelist-filter h2 { margin: 0 !important; }
+#changelist #changelist-filter ul { max-width: none; }
+
+/* Neutralize Django's colored sidebar states and related-widget icons. */
+#nav-sidebar .current-app, #nav-sidebar .current-model, #nav-sidebar tr.current-app, #nav-sidebar tr.current-model,
+#nav-sidebar .current-app a, #nav-sidebar .current-model a { color: var(--ink) !important; background: var(--surface-soft) !important; }
+#nav-sidebar .addlink, #nav-sidebar .addlink::before { color: var(--ink) !important; filter: grayscale(1) contrast(1.25); }
+
+@media (max-width: 900px) {
+  #changelist:has(#changelist-filter) { padding-right: 0 !important; }
+  #changelist #changelist-filter { position: static !important; width: 100% !important; min-width: 0 !important; max-height: none; border-top: 1px solid var(--line); border-left: 0; }
+}

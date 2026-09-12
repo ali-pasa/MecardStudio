@@ -1,0 +1,78 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}Sign in | Mecard Studio{% endblock %}
+{% block bodyclass %}login{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/admin.css' %}">
+  <link rel="icon" href="{% static 'admin/favicon.svg' %}" type="image/svg+xml">
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script defer src="{% static 'admin/admin.js' %}"></script>
+{% endblock %}
+
+{% block branding %}{% endblock %}
+{% block header %}{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+
+{% block content %}
+<main class="login-page">
+  <div class="login-ambient login-ambient--one"></div>
+  <div class="login-ambient login-ambient--two"></div>
+  <section class="login-card" aria-labelledby="login-title">
+    <div class="login-card__header">
+      <div class="brand-mark brand-mark--login">
+        <span class="brand-mark__icon">M</span>
+        <span>Mecard <em>Studio</em></span>
+      </div>
+      <button type="button" class="theme-toggle theme-toggle--login" data-theme-toggle aria-label="Toggle dark mode">
+        <span data-theme-icon>☾</span>
+      </button>
+    </div>
+    <div class="login-layout">
+      <div class="login-visual">
+        <span class="login-visual__kicker">Mecard Studio</span>
+        <div>
+          <p class="login-visual__number">01</p>
+          <h2>Turn every introduction into a connection.</h2>
+          <p>Create, manage and publish beautiful digital business cards from one calm workspace.</p>
+        </div>
+        <div class="login-visual__orb login-visual__orb--one"></div>
+        <div class="login-visual__orb login-visual__orb--two"></div>
+        <div class="login-visual__signature"><span></span> Your digital presence, refined.</div>
+      </div>
+      <div class="login-card__body">
+        <p class="eyebrow">Secure workspace</p>
+        <h1 id="login-title">Welcome back</h1>
+        <p class="login-subtitle">Sign in to manage your digital card studio.</p>
+        {% if form.errors %}
+          <div class="form-error" role="alert">Please enter a valid username and password.</div>
+        {% endif %}
+        <form action="{{ app_path }}" method="post" id="login-form">
+          {% csrf_token %}
+          <div class="field-group">
+            <label for="id_username">Username</label>
+            {{ form.username }}
+          </div>
+          <div class="field-group">
+            <div class="field-label-row">
+              <label for="id_password">Password</label>
+              {% if password_reset_url %}<a href="{{ password_reset_url }}">Forgot password?</a>{% endif %}
+            </div>
+            {{ form.password }}
+          </div>
+          <input type="hidden" name="next" value="{{ next }}">
+          <button type="submit" class="login-submit">Sign in <span aria-hidden="true">→</span></button>
+        </form>
+      </div>
+    </div>
+    <p class="login-footer">Protected admin area · Mecard Studio</p>
+  </section>
+</main>
+{% endblock %}
