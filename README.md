@@ -113,6 +113,13 @@ Edit `.env` and set your database credentials and a secret key:
 CREATE DATABASE mecard_studio CHARACTER SET utf8mb4;
 ```
 
+**Generate Static file:**
+
+Django's built-in admin static files are handled automatically by
+```bash
+python manage.py collectstatic --noinput
+```
+
 **Run migrations and start the server:**
 
 ```bash

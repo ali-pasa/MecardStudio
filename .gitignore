@@ -45,3 +45,4 @@ dist-ssr/
 .idea/
 .DS_Store
 Thumbs.db
+staticfiles/
