@@ -47,7 +47,9 @@ ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 # Application definition
 # ============================
 
-AUTH_USER_MODEL = "api.User" 
+AUTH_USER_MODEL = "api.User"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 INSTALLED_APPS = [
     'django.contrib.admin',
