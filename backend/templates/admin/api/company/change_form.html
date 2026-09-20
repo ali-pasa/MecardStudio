@@ -1,0 +1,38 @@
+{% extends "admin/change_form.html" %}
+{% load i18n static %}
+
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if original %}
+    <li>
+      <a href="#" id="open-card-generator" class="addlink">
+        Create Card
+      </a>
+    </li>
+  {% endif %}
+{% endblock %}
+
+{% block after_field_sets %}
+  {{ block.super }}
+  {% if original %}
+    {{ card_categories|json_script:"card-categories-data" }}
+
+    <!-- No visible panel here anymore — the root div just mounts the
+         React app, which renders nothing until the modal is opened. -->
+    <div id="card-generator-root" data-company-id="{{ original.pk }}"></div>
+
+    <script>
+      document.getElementById('open-card-generator').addEventListener('click', function (e) {
+        e.preventDefault();
+        if (window.mecardOpenCardGenerator) {
+          window.mecardOpenCardGenerator();
+        }
+      });
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" crossorigin></script>
+    <script type="text/babel" src="{% static 'mecard/js/card_generator.jsx' %}"></script>
+  {% endif %}
+{% endblock %}

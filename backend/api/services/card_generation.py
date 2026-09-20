@@ -1,8 +1,7 @@
-# api/services/card_generation.py
-
 import re
 import json
 import base64
+import time
 from django.conf import settings
 
 
@@ -67,12 +66,26 @@ DEMO_DATA = {
 }
 
 
-def build_template_prompt(company, brand, category, user_prompt=None):
+def build_template_prompt(company, brand, category, user_prompt=None, has_reference_image=False):
     required_fields = ", ".join(category.required_fields)
 
-    base_context = f"""You are a professional card/badge template designer. Generate a
-complete, self-contained HTML file (inline <style> only, no external
-CSS/JS) for a reusable "{category.name}" TEMPLATE.
+    base_context = f"""You are a senior product designer at a top-tier design studio
+(think: the visual quality of Stripe, Linear, or Apple's internal badge systems).
+Generate a complete, self-contained HTML file (inline <style> only, no external
+CSS/JS except Google Fonts) for a reusable "{category.name}" TEMPLATE.
+
+CRITICAL — OUTPUT ONLY THE CARD ITSELF, NOT A FULL PAGE:
+- The <body> must contain ONLY the card element, with NOTHING else around it.
+- Do NOT center the card on a full-viewport page. Do NOT set body min-height:
+  100vh, do NOT add a background color/gradient behind the card that fills
+  the whole page, and do NOT add any outer page padding.
+- body margin must be 0. The card element's own width/height (matching the
+  aspect ratio below) should define the ENTIRE visible page size — as if
+  this HTML file IS the card, not a webpage that happens to display a card.
+- This card will be rendered inside a small embedded iframe/thumbnail, so
+  any extra page chrome (dark background, centering, margins) will show up
+  as ugly empty space or force scrolling. Keep the output exactly the size
+  of the card and nothing more.
 
 IMPORTANT — THIS IS A TEMPLATE, NOT A FILLED-IN CARD:
 Do not invent sample data (no fake names, fake ID numbers, fake dates).
@@ -82,30 +95,78 @@ these will be programmatically replaced with real data later.
 FIELDS TO PLACE IN THE DESIGN (as literal placeholder tokens):
 {required_fields}
 
-CARD REQUIREMENTS:
+DESIGN QUALITY BAR — this must NOT look like a generic AI-generated card.
+Specifically:
+- Use a deliberate visual hierarchy: one clear focal point (usually the
+  name/photo), supporting details clearly secondary in size/weight/color
+- Use real spacing discipline — consistent padding/margins on an 8px grid,
+  never cramped or randomly uneven
+- Use subtle depth: soft shadows, thin borders, or a faint gradient — not
+  flat single-color blocks, but also not overdone/gaudy
+- Typography: import a real Google Font via <link> (e.g. Inter, Manrope,
+  Space Grotesk, or similar) rather than relying on default system fonts;
+  establish a clear type scale (name is largest, labels are smallest/muted)
+- Respect the brand colors as ACCENTS and structure, not by painting the
+  whole card in one color — use a neutral base (white, near-black, or a
+  soft tint of the brand color) with the brand color used deliberately for
+  emphasis (a stripe, a badge, an icon background, a border)
+- The QR code area must look intentional: a clean white or contrasting
+  tile with padding, not an afterthought
+- Assume this card will be viewed on a phone screen at typical badge size —
+  keep text legible, no more than 2 accent colors + neutrals
+
+CARD DIMENSIONS:
 - Aspect ratio: {category.default_aspect_ratio or "1.6:1"}
+- Set the card element's actual pixel width/height to match this ratio
+  (e.g. 480px x 300px for 1.6:1) — this defines the whole page's size
 - Leave a clearly styled area for the QR code placeholder token
-- Layout should look like a real ID/pass/card, not a form
+- Layout should look like a real, physical ID/pass/badge — reference how
+  actual corporate badges, event passes, or premium membership cards look
 
 FIXED BRAND DATA (use these as real, actual values — NOT placeholders):
 - Company name: {company.company_name or "Company Name"}
-- Logo URL: {brand.logo_url if brand and brand.logo_url else "none — use a text logo instead"}
+- Logo URL: {brand.logo_url if brand and brand.logo_url else "none — use a clean text logo instead"}
 - Primary color: {brand.primary_color if brand and brand.primary_color else "#2563eb"}
 - Secondary color: {brand.secondary_color if brand and brand.secondary_color else "#1e293b"}
 - Accent color: {brand.accent_color if brand and brand.accent_color else "#f59e0b"}
 """
 
+    if has_reference_image:
+        base_context += """
+A REFERENCE IMAGE is attached below. Prioritize matching its overall
+layout, composition, mood, and level of visual polish over the generic
+style guidance above — treat the reference as the primary style direction,
+while still using the FIXED BRAND DATA colors/logo above (not the
+reference image's own colors, unless they happen to match). The "output
+only the card itself" rule above still applies regardless of what the
+reference image shows (even if the reference is a screenshot of a full page).
+"""
+
     if user_prompt:
-        base_context += f"\n\nUSER'S SPECIFIC DESIGN REQUEST: {user_prompt}\nIncorporate this into the design.\n"
+        base_context += f"\n\nUSER'S SPECIFIC DESIGN REQUEST: {user_prompt}\nIncorporate this into the design, prioritizing it alongside the reference image guidance if both are present.\n"
 
     base_context += """
 OUTPUT RULES:
 - Return ONLY the HTML code — no explanation, no markdown code fences
-- Use the brand colors meaningfully (background, accents, borders, text)
+- Include a Google Fonts <link> tag if using a non-system font
 - Keep every {{placeholder}} token EXACTLY as given, character for character
-- Make it look professional and polished
+- The result should look like it came from a real design team, not a template generator
+- Remember: body contains ONLY the card, sized to the card's own dimensions
 """
     return base_context
+
+
+def _call_gemini_with_retry(client, **kwargs):
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as e:
+            is_503 = "503" in str(e) or "UNAVAILABLE" in str(e)
+            if is_503 and attempt < max_attempts:
+                time.sleep(2 * attempt)  # 2s, then 4s backoff
+                continue
+            raise
 
 
 def generate_card_template(
@@ -113,7 +174,7 @@ def generate_card_template(
     extra_instruction=None,
     previous_html=None,
     user_prompt=None,
-    reference_image_url=None,   # either a real URL or a data: URI (base64)
+    reference_image_url=None,
 ):
     """
     Generates (or edits) a reusable card TEMPLATE.
@@ -122,13 +183,14 @@ def generate_card_template(
     """
     api_key = getattr(settings, "GEMINI_API_KEY", None)
 
-    prompt = build_template_prompt(company, brand, category, user_prompt=user_prompt)
+    prompt = build_template_prompt(
+        company, brand, category,
+        user_prompt=user_prompt,
+        has_reference_image=bool(reference_image_url),
+    )
 
     if extra_instruction:
         prompt += f"\n\nADDITIONAL INSTRUCTION: {extra_instruction}\nApply this to the design above, keeping all placeholder tokens intact."
-
-    if reference_image_url:
-        prompt += "\n\nA REFERENCE IMAGE is attached — use it as visual/style inspiration (layout, color mood, general aesthetic) for this card design, while still using the FIXED BRAND DATA above for actual colors/logo."
 
     if previous_html:
         prompt += f"\n\nHere is the PREVIOUS TEMPLATE HTML to modify:\n{previous_html}\n"
@@ -139,7 +201,7 @@ def generate_card_template(
             f"<p><strong>{f}:</strong> {FIELD_TOKEN_MAP.get(f, '{{' + f + '}}')}</p>"
             for f in category.required_fields
         )
-        return f"""<html><body style="font-family:sans-serif;padding:20px;
+        return f"""<html><body style="margin:0;font-family:sans-serif;padding:20px;
         border:2px dashed #ccc;width:340px;">
         <h3>{{{{company_name}}}}</h3>
         <p>{category.name} template (mock — no AI key set)</p>
@@ -153,7 +215,6 @@ def generate_card_template(
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     )
 
-    # Build multimodal message content if an image is provided
     if reference_image_url:
         content = [
             {"type": "text", "text": prompt},
@@ -162,7 +223,8 @@ def generate_card_template(
     else:
         content = prompt
 
-    response = client.chat.completions.create(
+    response = _call_gemini_with_retry(
+        client,
         model="gemini-3.6-flash",
         messages=[{"role": "user", "content": content}],
     )

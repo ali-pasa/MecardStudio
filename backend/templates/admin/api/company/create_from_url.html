@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="dashboard-shell" style="max-width: 640px;">
+  <p class="eyebrow">New company</p>
+  <h1>Add company from URL</h1>
+  <p class="page-subtitle">
+    Paste the company's website — we'll extract the brand, contact and social data automatically.
+  </p>
+
+  <div class="stat-card" style="margin-top: 24px;">
+    <div class="field-group">
+      <label for="website-url-input">Website URL</label>
+      <input type="url" id="website-url-input" placeholder="https://example.com" required
+             style="width:100%; min-height:44px; box-sizing:border-box; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); color:var(--ink); padding:10px 12px;">
+    </div>
+
+    <div id="form-error" style="display:none; margin-top:14px; border:1px solid #e6a6a6; border-radius:8px; padding:10px 12px; color:#9a3030; background:#fff1f1; font-size:12px;"></div>
+
+    <button id="submit-btn" class="primary-action" style="margin-top:18px;">
+      <span id="submit-icon">⇢</span>
+      <span id="submit-label">Extract &amp; create company</span>
+    </button>
+
+    <a href="{% url 'admin:api_company_changelist' %}" style="display:inline-block; margin-top:14px; color:var(--muted); font-size:13px;">
+      Cancel and go back
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  const input = document.getElementById('website-url-input');
+  const button = document.getElementById('submit-btn');
+  const label = document.getElementById('submit-label');
+  const errorBox = document.getElementById('form-error');
+
+  button.addEventListener('click', async function () {
+    const url = input.value.trim();
+    errorBox.style.display = 'none';
+
+    if (!url) {
+      errorBox.textContent = 'Please enter a website URL.';
+      errorBox.style.display = 'block';
+      return;
+    }
+
+    button.disabled = true;
+    label.textContent = 'Extracting… this can take a few seconds';
+
+    try {
+      const response = await fetch('/api/companies/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ website_url: url }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Extraction failed. Please check the URL and try again.');
+      }
+
+      // Success — go to the newly created/updated company's change page
+      window.location.href = `/admin/api/company/${data.id}/change/`;
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = 'block';
+      button.disabled = false;
+      label.textContent = 'Extract & create company';
+    }
+  });
+})();
+</script>
+{% endblock %}

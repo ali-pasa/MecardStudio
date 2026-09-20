@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from .models import User, Company, CompanyBrandPreference, Card, CardCategory
 from .serializers import UserSerializer, CompanySerializer, CardSerializer
 from .services.extraction import run_full_extraction
-from .services.card_generation import generate_card_template, render_preview_html
+from .services.card_generation import generate_card_template, render_preview_html, encode_uploaded_image_to_data_uri
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().select_related('role')
@@ -153,18 +153,6 @@ class CardViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="generate")
     def generate(self, request):
-        """
-        POST /api/cards/generate/  (multipart/form-data if using reference_image)
-
-        Fields:
-        - company_id (required)
-        - category_slug (required)
-        - name (optional)
-        - variant_count (optional, default 3)
-        - user_prompt (optional) — free-text design instruction
-        - reference_image (optional) — uploaded image file
-        - reference_image_url (optional) — OR a hosted image URL instead of upload
-        """
         company_id = request.data.get("company_id")
         category_slug = request.data.get("category_slug")
         name = request.data.get("name", "Untitled Card")
@@ -176,8 +164,6 @@ class CardViewSet(viewsets.ModelViewSet):
         uploaded_file = request.FILES.get("reference_image")
         if uploaded_file:
             reference_image_url = encode_uploaded_image_to_data_uri(uploaded_file)
-        elif request.data.get("reference_image_url"):
-            reference_image_url = request.data.get("reference_image_url")
 
         try:
             company = Company.objects.get(id=company_id)
@@ -208,10 +194,7 @@ class CardViewSet(viewsets.ModelViewSet):
                     reference_image_url=reference_image_url,
                 )
             except Exception as e:
-                return Response(
-                    {"error": f"Template generation failed on variant {i}: {str(e)}"},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
+                return Response({"error": f"Template generation failed on variant {i}: {str(e)}"}, status=status.HTTP_502_BAD_GATEWAY)
 
             public_slug = f"{slugify(name)}-v{i}-{uuid.uuid4().hex[:8]}"
             card = Card.objects.create(

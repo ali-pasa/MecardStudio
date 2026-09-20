@@ -1,5 +1,9 @@
+import json
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.urls import path
+from django.shortcuts import render
+from django.template.response import TemplateResponse
 
 from .models import (
     Card,
@@ -65,6 +69,38 @@ class CompanyAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     list_select_related = ("user",)
 
+    change_list_template = "admin/api/company/change_list.html"
+    change_form_template = "admin/api/company/change_form.html"
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "create-from-url/",
+                self.admin_site.admin_view(self.create_from_url_view),
+                name="api_company_create_from_url",
+            ),
+        ]
+        return custom_urls + urls
+
+    def create_from_url_view(self, request):
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Add company from URL",
+            "opts": self.model._meta,
+        }
+        return TemplateResponse(request, "admin/api/company/create_from_url.html", context)
+
+    def change_view(self, request, object_id, form_url="", extra_context=None):
+        categories = CardCategory.objects.filter(is_active=True).order_by("name").values(
+            "id", "name", "slug", "required_fields", "default_aspect_ratio"
+        )
+        extra_context = extra_context or {}
+        extra_context["card_categories"] = list(categories)
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
 @admin.register(CompanyBrandPreference)
 class CompanyBrandPreferenceAdmin(admin.ModelAdmin):
