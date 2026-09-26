@@ -5,6 +5,7 @@ from django.urls import path
 from django.shortcuts import render
 from django.template.response import TemplateResponse
 
+from .audit import apply_request_audit
 from .models import (
     Card,
     CardCategory,
@@ -15,8 +16,25 @@ from .models import (
 )
 
 
+class AuditAdminMixin:
+    audit_readonly_fields = (
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+        "ip_address",
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        return (*super().get_readonly_fields(request, obj), *self.audit_readonly_fields)
+
+    def save_model(self, request, obj, form, change):
+        apply_request_audit(obj, request, creating=not change)
+        super().save_model(request, obj, form, change)
+
+
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(AuditAdminMixin, BaseUserAdmin):
     """User master with fast search, status filters and role filtering."""
 
     list_display = (
@@ -44,17 +62,19 @@ class UserAdmin(BaseUserAdmin):
         return obj.is_active
 
     fieldsets = BaseUserAdmin.fieldsets + (
-        ("Access profile", {"fields": ("role",)}),
+        ("Access profile", {"fields": ("role", "meta_data")}),
+        ("Audit information", {"fields": AuditAdminMixin.audit_readonly_fields}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ("Access profile", {"fields": ("role",)}),
+        ("Access profile", {"fields": ("role", "is_active", "meta_data")}),
+        ("Audit information", {"fields": AuditAdminMixin.audit_readonly_fields}),
     )
 
 
 @admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
-    list_display = ("name", "user_count")
-    list_filter = ("name",)
+class RoleAdmin(AuditAdminMixin, admin.ModelAdmin):
+    list_display = ("name", "is_active", "user_count")
+    list_filter = ("is_active", "name")
     search_fields = ("name",)
 
     @admin.display(description="Users")
@@ -63,9 +83,9 @@ class RoleAdmin(admin.ModelAdmin):
 
 
 @admin.register(Company)
-class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("company_name", "user", "industry", "created_at")
-    list_filter = ("industry", "created_at")
+class CompanyAdmin(AuditAdminMixin, admin.ModelAdmin):
+    list_display = ("company_name", "user", "industry", "is_active", "created_at")
+    list_filter = ("industry", "is_active", "created_at")
     search_fields = ("company_name", "website_url", "email", "user__username")
     date_hierarchy = "created_at"
     list_select_related = ("user",)
@@ -104,21 +124,21 @@ class CompanyAdmin(admin.ModelAdmin):
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
 @admin.register(CompanyBrandPreference)
-class CompanyBrandPreferenceAdmin(admin.ModelAdmin):
-    list_display = ("company", "font_family", "brand_style", "updated_at")
-    list_filter = ("company", "font_family", "brand_style", "updated_at")
+class CompanyBrandPreferenceAdmin(AuditAdminMixin, admin.ModelAdmin):
+    list_display = ("company", "font_family", "brand_style", "is_active", "updated_at")
+    list_filter = ("company", "font_family", "brand_style", "is_active", "updated_at")
     search_fields = ("company__company_name", "font_family", "brand_style")
 
 
 @admin.register(CardCategory)
-class CardCategoryAdmin(admin.ModelAdmin):
+class CardCategoryAdmin(AuditAdminMixin, admin.ModelAdmin):
     list_display = ("name", "slug", "is_active", "default_aspect_ratio")
     list_filter = ("is_active",)
     search_fields = ("name", "slug")
 
 
 @admin.register(Card)
-class CardAdmin(admin.ModelAdmin):
+class CardAdmin(AuditAdminMixin, admin.ModelAdmin):
     list_display = ("name", "company", "category", "is_active", "updated_at")
     list_filter = ("is_active", "category", "updated_at")
     search_fields = ("name", "public_slug", "company__company_name")

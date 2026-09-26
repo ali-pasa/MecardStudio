@@ -7,18 +7,28 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.contrib.auth import get_user_model
 from django.utils.text import slugify
+from django.utils import timezone
 
+from .audit import apply_request_audit, get_request_ip, request_audit_values
 from .models import User, Company, CompanyBrandPreference, Card, CardCategory
 from .serializers import UserSerializer, CompanySerializer, CardSerializer
 from .services.extraction import run_full_extraction
 from .services.card_generation import generate_card_template, render_preview_html, encode_uploaded_image_to_data_uri
 
-class UserViewSet(viewsets.ModelViewSet):
+class RequestAuditViewSetMixin:
+    def perform_create(self, serializer):
+        serializer.save(**request_audit_values(self.request, creating=True))
+
+    def perform_update(self, serializer):
+        serializer.save(**request_audit_values(self.request))
+
+
+class UserViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
     queryset = User.objects.all().select_related('role')
     serializer_class = UserSerializer
 
 
-class CompanyViewSet(viewsets.ModelViewSet):
+class CompanyViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
     queryset = Company.objects.all().select_related('user', 'brand_preference')
     serializer_class = CompanySerializer
 
@@ -50,7 +60,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company, created = Company.objects.get_or_create(
             user=user,
             website_url=website_url,
-            defaults={"ip_address": request.META.get("REMOTE_ADDR")},
+            defaults=request_audit_values(request, creating=True),
         )
 
         try:
@@ -81,23 +91,34 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company.facebook_url = social.get("facebook_url") or company.facebook_url
         company.youtube_url = social.get("youtube_url") or company.youtube_url
         company.twitter_url = social.get("twitter_url") or company.twitter_url
+        apply_request_audit(company, request, creating=False)
         company.save()
 
-        CompanyBrandPreference.objects.update_or_create(
-            company=company,
-            defaults={
-                "logo_url": brand.get("logo_url"),
-                "primary_color": brand.get("primary_color"),
-                "secondary_color": brand.get("secondary_color"),
-                "accent_color": brand.get("accent_color"),
-            },
-        )
+        self._save_brand_preference(company, brand)
 
         serialized = self.get_serializer(company)
         return Response(
             serialized.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+    def _save_brand_preference(self, company, brand):
+        brand_values = {
+            "logo_url": brand.get("logo_url"),
+            "primary_color": brand.get("primary_color"),
+            "secondary_color": brand.get("secondary_color"),
+            "accent_color": brand.get("accent_color"),
+        }
+        preference, created = CompanyBrandPreference.objects.get_or_create(
+            company=company,
+            defaults={**brand_values, **request_audit_values(self.request, creating=True)},
+        )
+        if not created:
+            for field, value in brand_values.items():
+                setattr(preference, field, value)
+            apply_request_audit(preference, self.request, creating=False)
+            preference.save()
+        return preference
 
     @action(detail=True, methods=["post"], url_path="refresh")
     def refresh(self, request, pk=None):
@@ -131,23 +152,16 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company.facebook_url = social.get("facebook_url") or company.facebook_url
         company.youtube_url = social.get("youtube_url") or company.youtube_url
         company.twitter_url = social.get("twitter_url") or company.twitter_url
+        apply_request_audit(company, request, creating=False)
         company.save()
 
-        CompanyBrandPreference.objects.update_or_create(
-            company=company,
-            defaults={
-                "logo_url": brand.get("logo_url"),
-                "primary_color": brand.get("primary_color"),
-                "secondary_color": brand.get("secondary_color"),
-                "accent_color": brand.get("accent_color"),
-            },
-        )
+        self._save_brand_preference(company, brand)
 
         serialized = self.get_serializer(company)
         return Response(serialized.data, status=status.HTTP_200_OK)
 
 
-class CardViewSet(viewsets.ModelViewSet):
+class CardViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
     queryset = Card.objects.all().select_related("company", "category")
     serializer_class = CardSerializer
 
@@ -200,6 +214,7 @@ class CardViewSet(viewsets.ModelViewSet):
             card = Card.objects.create(
                 company=company, category=category, name=f"{name} (Variant {i})",
                 html_content=html, public_slug=public_slug, is_active=(i == 1),
+                **request_audit_values(request, creating=True),
             )
             created_cards.append(card)
 
@@ -227,8 +242,14 @@ class CardViewSet(viewsets.ModelViewSet):
         from the same generation batch (same company + category + is_active group).
         """
         card = self.get_object()
-        Card.objects.filter(company=card.company, category=card.category).update(is_active=False)
+        Card.objects.filter(company=card.company, category=card.category).update(
+            is_active=False,
+            updated_at=timezone.now(),
+            updated_by=request.user if request.user.is_authenticated else None,
+            ip_address=get_request_ip(request),
+        )
         card.is_active = True
+        apply_request_audit(card, request, creating=False)
         card.save()
         serialized = self.get_serializer(card)
         return Response(serialized.data)

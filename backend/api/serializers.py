@@ -1,6 +1,14 @@
 from rest_framework import serializers
 from .models import User, Role, Company, Card, CompanyBrandPreference
 
+AUDIT_READ_ONLY_FIELDS = [
+    "ip_address",
+    "created_by",
+    "updated_by",
+    "created_at",
+    "updated_at",
+]
+
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(write_only=True, required=False)
@@ -8,7 +16,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'password', 'role', 'role_name']
+        fields = [
+            'id', 'username', 'email', 'password', 'role', 'role_name',
+            'is_active', 'meta_data', *AUDIT_READ_ONLY_FIELDS,
+        ]
+        read_only_fields = AUDIT_READ_ONLY_FIELDS
         extra_kwargs = {
             'password': {'write_only': True, 'style': {'input_type': 'password'}}
         }
@@ -37,8 +49,10 @@ class CompanyBrandPreferenceSerializer(serializers.ModelSerializer):
         model = CompanyBrandPreference
         fields = [
             "logo_url", "primary_color", "secondary_color", "accent_color",
-            "font_family", "brand_style", "background_style",
+            "font_family", "brand_style", "background_style", "is_active",
+            "meta_data", *AUDIT_READ_ONLY_FIELDS,
         ]
+        read_only_fields = AUDIT_READ_ONLY_FIELDS
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -50,6 +64,7 @@ class CompanySerializer(serializers.ModelSerializer):
         model = Company
         fields = [
             'id', 'user', 'website_url', 'ip_address',
+            'is_active', 'meta_data', 'created_by', 'updated_by',
             'company_name', 'tagline', 'about', 'industry',
             'address', 'phone', 'email', 'website',
             'linkedin_url', 'instagram_url', 'facebook_url',
@@ -64,6 +79,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'youtube_url', 'twitter_url',
             'created_at', 'updated_at',
         ]
+        read_only_fields += ['ip_address', 'created_by', 'updated_by']
         # Only website_url and ip_address remain writable by the client
 
 
@@ -73,6 +89,6 @@ class CardSerializer(serializers.ModelSerializer):
         fields = [
             "id", "company", "category", "name",
             "html_content", "public_slug", "is_active",
-            "created_at", "updated_at",
+            "meta_data", *AUDIT_READ_ONLY_FIELDS,
         ]
-        read_only_fields = ["html_content", "public_slug"]
+        read_only_fields = ["html_content", "public_slug", *AUDIT_READ_ONLY_FIELDS]

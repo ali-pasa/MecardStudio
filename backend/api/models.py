@@ -3,11 +3,42 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 
+class AuditFields(models.Model):
+    meta_data = models.JSONField(default=dict, blank=True, null=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="%(app_label)s_%(class)s_created_records",
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="%(app_label)s_%(class)s_updated_records",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class ActiveAuditFields(AuditFields):
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        abstract = True
+
+
 # ------------------------------------------------------------
 # Role
 # ------------------------------------------------------------
 
-class Role(models.Model):
+class Role(ActiveAuditFields):
     name = models.CharField(max_length=50, unique=True)
 
     class Meta:
@@ -21,7 +52,7 @@ class Role(models.Model):
 # User
 # ------------------------------------------------------------
 
-class User(AbstractUser):
+class User(AbstractUser, AuditFields):
     role = models.ForeignKey(
         Role,
         on_delete=models.PROTECT,
@@ -41,7 +72,7 @@ class User(AbstractUser):
 # Company
 # ------------------------------------------------------------
 
-class Company(models.Model):
+class Company(ActiveAuditFields):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -50,12 +81,6 @@ class Company(models.Model):
 
     # Website submitted for extraction
     website_url = models.URLField(max_length=500)
-
-    # IP address from which the company was created
-    ip_address = models.GenericIPAddressField(
-        null=True,
-        blank=True,
-    )
 
     # Company information
     company_name = models.CharField(max_length=255, null=True, blank=True)
@@ -74,9 +99,6 @@ class Company(models.Model):
     youtube_url = models.URLField(max_length=500, null=True, blank=True)
     twitter_url = models.URLField(max_length=500, null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
         db_table = "companies"
         verbose_name_plural = "Companies"
@@ -92,7 +114,7 @@ class Company(models.Model):
 # Company Brand Preference
 # ------------------------------------------------------------
 
-class CompanyBrandPreference(models.Model):
+class CompanyBrandPreference(ActiveAuditFields):
     company = models.OneToOneField(
         Company,
         on_delete=models.CASCADE,
@@ -107,9 +129,6 @@ class CompanyBrandPreference(models.Model):
     brand_style = models.CharField(max_length=100, null=True, blank=True)
     background_style = models.CharField(max_length=100, null=True, blank=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
         db_table = "company_brand_preferences"
         verbose_name_plural = "Company brand preferences"
@@ -121,7 +140,7 @@ class CompanyBrandPreference(models.Model):
 # Card Category
 # ------------------------------------------------------------
 
-class CardCategory(models.Model):
+class CardCategory(ActiveAuditFields):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
 
@@ -136,8 +155,6 @@ class CardCategory(models.Model):
         blank=True,
     )
 
-    is_active = models.BooleanField(default=True)
-
     class Meta:
         db_table = "card_categories"
         verbose_name_plural = "Card categories"
@@ -150,7 +167,7 @@ class CardCategory(models.Model):
 # Card
 # ------------------------------------------------------------
 
-class Card(models.Model):
+class Card(ActiveAuditFields):
     company = models.ForeignKey(
         Company,
         on_delete=models.CASCADE,
@@ -171,11 +188,6 @@ class Card(models.Model):
         max_length=150,
         unique=True,
     )
-
-    is_active = models.BooleanField(default=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "cards"
