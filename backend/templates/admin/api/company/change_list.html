@@ -1,10 +1,17 @@
 {% extends "admin/change_list.html" %}
 {% load i18n %}
 
-{% block object-tools-items %}
-  <li>
-    <a href="{% url 'admin:api_company_create_from_url' %}" class="addlink">
-      New
-    </a>
-  </li>
+{% block content_title %}
+  {% if title %}
+    <div class="admin-page-heading">
+      <h1>{{ title }}</h1>
+      <ul class="object-tools">
+        <li>
+          <a href="{% url 'admin:api_company_create_from_url' %}" class="addlink">New</a>
+        </li>
+      </ul>
+    </div>
+  {% endif %}
 {% endblock %}
+
+{% block object-tools %}{% endblock %}

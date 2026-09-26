@@ -195,6 +195,36 @@ body.change-form #content > h1 {
   padding: 0 34px;
 }
 
+body.change-form #content > h2 {
+  box-sizing: border-box;
+  padding-right: 34px;
+  padding-left: 34px;
+}
+
+body.change-form #content {
+  position: relative;
+}
+
+body.change-form #content-main > .object-tools li {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0;
+}
+
+body.change-form #content-main > .object-tools {
+  display: flex;
+  align-items: center;
+  position: absolute;
+  top: 8px;
+  right: 34px;
+  z-index: 2;
+  float: none;
+  gap: 8px;
+  margin: 0 !important;
+}
+
 body.change-form #content-main .form-row .help,
 body.change-form #content-main .form-row .helptext,
 body.change-form #content-main .form-row p.help,
@@ -211,6 +241,16 @@ body.change-form #content-main .form-row .help li {
 }
 
 /* Filter rail */
+body.change-list #content {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+body.change-list #main > #content-start.content {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
 body.change-list #content > .admin-page-heading {
   display: flex;
   min-height: 112px;
@@ -244,7 +284,8 @@ body.change-list #content > .admin-page-heading > .object-tools {
 }
 
 body.change-list #content > .admin-page-heading > .object-tools li {
-  display: block;
+  display: flex;
+  align-items: center;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -509,7 +550,23 @@ body.change-list #content > .admin-page-heading > .object-tools a {
   #header { padding-right: 20px; padding-left: 20px; }
   .admin-topbar__eyebrow { display: none; }
   .breadcrumbs { margin-left: 0 !important; padding-right: 16px !important; padding-left: 16px !important; }
+  body.change-form #main > #content-start.content,
+  body.change-form #content,
+  body.change-form #content-main {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  body.change-form #main > #content-start.content { flex: 1 1 0%; }
+  body.change-form #content { margin-left: 0 !important; }
   body.change-form #content > h1 { min-height: 52px; padding-right: 16px; padding-left: 16px; }
+  body.change-form #content > h2 { padding-right: 16px; padding-left: 16px; }
+  body.change-form #content-main > .object-tools {
+    position: static;
+    width: max-content;
+    max-width: 100%;
+    margin: 0 0 12px auto !important;
+  }
   body.change-list #content > .admin-page-heading {
     min-height: 0;
     flex-wrap: wrap;
