@@ -119,8 +119,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--brand) !importan
 .breadcrumbs { box-sizing: border-box; height: 48px; margin: 0 !important; padding: 14px 30px !important; border-bottom: 1px solid var(--line); background: var(--surface) !important; color: var(--muted) !important; font-size: 13px; }
 #content { margin-left: 244px !important; min-height: calc(100vh - 120px); padding: 0 !important; }
 #content-main { padding: 30px 34px 60px; }
-#content h1 { margin: 0 0 22px; font-size: 27px; letter-spacing: -.045em; }
-#content .object-tools { margin-top: -4px; }
+#content h1 { margin: 0 !important; font-size: 27px; letter-spacing: -.045em; }
+#content .object-tools { margin-top: 0 !important; }
 #content .object-tools a { border-radius: 8px; background: var(--brand-deep) !important; padding: 10px 14px; font-weight: 750; }
 #changelist { margin: 0 !important; border-radius: 15px; }
 #changelist .changelist-form-container { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 0; }
@@ -554,5 +554,250 @@ html.dark .password-reset-page, body.dark-mode .password-reset-page { background
     width: 100%;
     border-left: 0;
     border-top: 1px solid var(--line);
+  }
+}
+
+/* Final admin alignment pass.
+   Keep the shell, page heading, and Add button on the same row without disturbing the list content below. */
+#nav-sidebar {
+  width: 275px;
+}
+
+#content {
+  margin-left: 275px !important;
+}
+
+#nav-sidebar .module table {
+  table-layout: fixed;
+}
+
+#nav-sidebar .module th {
+  width: auto;
+  text-align: left;
+}
+
+#nav-sidebar .module td {
+  width: 58px;
+  text-align: right;
+}
+
+#nav-sidebar .module td a.addlink {
+  display: inline-flex;
+  width: 58px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 9px 10px 9px 4px;
+  white-space: nowrap;
+}
+
+#content-main > #changelist {
+  margin-top: 82px !important;
+}
+
+#changelist {
+  display: block !important;
+  position: relative !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-right: 338px !important;
+}
+
+#changelist .changelist-form-container {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#changelist-form {
+  display: block !important;
+  min-width: 0;
+  width: 100% !important;
+}
+
+#changelist-filter {
+  position: absolute !important;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: block !important;
+  width: 338px;
+  min-width: 338px !important;
+  height: auto !important;
+  box-sizing: border-box;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  border-top: 0;
+}
+
+#toolbar,
+#changelist-search,
+#changelist .actions,
+#changelist .results,
+#changelist .paginator {
+  box-sizing: border-box;
+  width: 100% !important;
+}
+
+#toolbar {
+  min-height: 72px;
+  padding: 16px 18px !important;
+}
+
+#changelist-search {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 0 !important;
+}
+
+#changelist-search input[type="text"] {
+  flex: 1 1 auto;
+  width: auto !important;
+  min-width: 0;
+  min-height: 40px;
+}
+
+#changelist-search input[type="submit"] {
+  flex: 0 0 auto;
+  min-height: 40px;
+  margin: 0 !important;
+}
+
+#result_list {
+  width: 100% !important;
+  min-width: 760px;
+  table-layout: auto;
+}
+
+#result_list th,
+#result_list td {
+  vertical-align: middle;
+}
+
+/* Django renders the toolbar, date hierarchy and form as siblings. They
+   must remain a vertical stack inside the left side of the card. */
+#changelist > #toolbar,
+#changelist > .xfull,
+#changelist > .date-hierarchy,
+#changelist > #changelist-form,
+#changelist .changelist-form-container,
+#changelist #changelist-form {
+  float: none !important;
+  clear: both !important;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+#changelist > .xfull,
+#changelist > .date-hierarchy {
+  display: block !important;
+}
+
+#changelist .changelist-form-container > #toolbar,
+#changelist .changelist-form-container > .xfull,
+#changelist .changelist-form-container > .date-hierarchy,
+#changelist .changelist-form-container > #changelist-form {
+  display: block !important;
+  float: none !important;
+  clear: both !important;
+  width: 100% !important;
+}
+
+@media (max-width: 900px) {
+  #nav-sidebar { width: 244px; }
+  #content { margin-left: 244px !important; }
+  #content-main { padding: 0 24px 50px; }
+  #changelist { padding-right: 280px !important; }
+  #changelist-filter { width: 280px; min-width: 280px !important; }
+}
+
+@media (max-width: 760px) {
+  #content-main > #changelist { margin-top: 0 !important; }
+  #changelist { display: block !important; padding-right: 0 !important; }
+  #changelist .changelist-form-container { display: block !important; }
+  #changelist-filter { position: static !important; width: 100%; min-width: 0 !important; border-top: 1px solid var(--line); border-left: 0; }
+}
+
+/* Shared heading and object tools: keep both in the same layout container. */
+body.change-list #content > .admin-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 112px;
+  padding: 24px 42px 18px;
+}
+
+body.change-list #content > .admin-page-heading h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+body.change-list #content > .admin-page-heading > .object-tools {
+  position: static;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 !important;
+  padding: 0;
+  list-style: none;
+}
+
+body.change-list #content > .admin-page-heading > .object-tools li {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.change-list #content > .admin-page-heading > .object-tools a {
+  display: inline-flex;
+  min-width: 104px;
+  height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 0 18px !important;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#content-main > #changelist {
+  margin-top: 0 !important;
+}
+
+@media (max-width: 900px) {
+  body.change-list #content > .admin-page-heading {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  body.change-list #content > .admin-page-heading {
+    min-height: 0;
+    flex-wrap: wrap;
+    padding: 24px 16px 18px;
+  }
+
+  body.change-list #content > .admin-page-heading h1 {
+    flex-basis: 220px;
+    font-size: 26px;
   }
 }
