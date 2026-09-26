@@ -19,17 +19,21 @@
   const sidebarToggle = document.querySelector('.toggle-nav-sidebar');
   const customSidebarToggle = document.querySelector('[data-sidebar-toggle]');
   const sidebar = document.querySelector('#nav-sidebar');
-  const setSidebarState = (collapsed) => {
+  const mobileViewport = window.matchMedia('(max-width: 1100px)');
+  const setSidebarState = (collapsed, persist = true) => {
     document.body.classList.toggle('sidebar-collapsed', collapsed);
     if (sidebar) sidebar.classList.toggle('custom-collapsed', collapsed);
     document.querySelectorAll('[data-sidebar-toggle]').forEach((button) => {
       button.setAttribute('aria-expanded', String(!collapsed));
       button.classList.toggle('is-collapsed', collapsed);
     });
-    localStorage.setItem('mecard-admin-sidebar', collapsed ? 'collapsed' : 'open');
+    if (persist) localStorage.setItem('mecard-admin-sidebar', collapsed ? 'collapsed' : 'open');
   };
   if ((sidebarToggle || customSidebarToggle) && sidebar) {
-    setSidebarState(localStorage.getItem('mecard-admin-sidebar') === 'collapsed');
+    setSidebarState(mobileViewport.matches || localStorage.getItem('mecard-admin-sidebar') === 'collapsed', false);
+    mobileViewport.addEventListener('change', (event) => {
+      setSidebarState(event.matches || localStorage.getItem('mecard-admin-sidebar') === 'collapsed', false);
+    });
     // Capture and stop Django's built-in handler; otherwise both handlers
     // toggle the sidebar and it flashes open before closing again.
     document.addEventListener('click', (event) => {

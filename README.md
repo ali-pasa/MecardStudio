@@ -129,6 +129,9 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+**Rund the seeder file
+python manage.py seed_card_categories
+
 The backend is now running at **http://127.0.0.1:8000**.
 Verify it with: http://127.0.0.1:8000/api/health/
 
