@@ -6,6 +6,7 @@
 {% block extrastyle %}
   {{ block.super }}
   <link rel="stylesheet" href="{% static 'mecard/css/admin.css' %}">
+  <link rel="stylesheet" href="{% static 'mecard/css/admin-changelist.css' %}">
   <link rel="icon" href="{% static 'mecard/images/favicon.svg' %}" type="image/svg+xml">
 {% endblock %}
 
@@ -15,40 +16,9 @@
 {% endblock %}
 
 {% block branding %}
-  <div class="brand-cluster">
-    <button type="button" class="sidebar-toggle" data-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true"><span>☰</span></button>
-    <a href="{% url 'admin:index' %}" class="brand-mark" aria-label="Mecard Studio admin home">
-      <span class="brand-mark__icon">M</span>
-      <span>Mecard <em>Studio</em></span>
-    </a>
-  </div>
+  {% include "admin/components/topbar_branding.html" %}
 {% endblock %}
 
 {% block nav-global %}
-  <div class="admin-topbar__meta">
-    <span class="admin-topbar__eyebrow">Workspace</span>
-    <span class="admin-topbar__user">{{ user.get_full_name|default:user.username }}</span>
-    <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
-      <span data-theme-icon>☾</span>
-    </button>
-    <details class="profile-menu">
-      <summary class="profile-menu__trigger" aria-label="Open account menu">
-        <span class="profile-menu__avatar">{{ user.username|first|upper }}</span>
-        <span class="profile-menu__chevron">⌄</span>
-      </summary>
-      <div class="profile-menu__dropdown">
-        <div class="profile-menu__identity">
-          <span class="profile-menu__avatar profile-menu__avatar--large">{{ user.username|first|upper }}</span>
-          <div><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ user.email|default:'Admin account' }}</small></div>
-        </div>
-        <a href="{% url 'admin:api_user_change' user.pk %}"><span>◎</span> Profile</a>
-        <a href="{% url 'admin:password_change' %}"><span>⌁</span> Change password</a>
-        <div class="profile-menu__divider"></div>
-        <form method="post" action="{% url 'admin:logout' %}">
-          {% csrf_token %}
-          <button type="submit"><span>↪</span> Log out</button>
-        </form>
-      </div>
-    </details>
-  </div>
+  {% include "admin/components/topbar_actions.html" %}
 {% endblock %}

@@ -119,6 +119,8 @@ Django's built-in admin static files are handled automatically by
 ```bash
 python manage.py collectstatic --noinput
 ```
+**Genrate Django Secret Key
+python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 
 **Run migrations and start the server:**
 

@@ -360,7 +360,7 @@ html.dark .password-reset-page, body.dark-mode .password-reset-page { background
 #nav-sidebar .module caption { border-radius: 7px; }
 #nav-sidebar .module table, #nav-sidebar .module tbody, #nav-sidebar .module tr, #nav-sidebar .module tr:nth-child(odd), #nav-sidebar .module tr:nth-child(even), #nav-sidebar .module th, #nav-sidebar .module td { color: var(--ink) !important; background: var(--surface) !important; border-color: var(--line) !important; }
 #nav-sidebar .module tr:hover, #nav-sidebar .module tr.current-app, #nav-sidebar .module tr.current-model { background: var(--surface-soft) !important; }
-#nav-sidebar .module th a, #nav-sidebar .module td a, #nav-sidebar .module th a:visited, #nav-sidebar .module td a:visited { color: var(--ink) !important; background: transparent !important; opacity: 1 !important; }
+#nav-sidebar .module th a, #nav-sidebar .module td a, #nav-sidebar .module th a:visited, #nav-sidebar .module td a:visited { color: var(--ink) !important; background-color: transparent !important; opacity: 1 !important; }
 #nav-sidebar .module th a:hover, #nav-sidebar .module td a:hover { color: var(--muted) !important; background: transparent !important; }
 
 /* Explicit sidebar control in the admin header. */
@@ -567,8 +567,8 @@ html.dark .password-reset-page, body.dark-mode .password-reset-page { background
   margin-left: 275px !important;
 }
 
-#nav-sidebar .module table {
-  table-layout: fixed;
+#main > #nav-sidebar + #content-start.content {
+  max-width: none !important;
 }
 
 #nav-sidebar .module th {
@@ -782,22 +782,3 @@ body.change-list #content > .admin-page-heading > .object-tools a {
   margin-top: 0 !important;
 }
 
-@media (max-width: 900px) {
-  body.change-list #content > .admin-page-heading {
-    padding-right: 24px;
-    padding-left: 24px;
-  }
-}
-
-@media (max-width: 760px) {
-  body.change-list #content > .admin-page-heading {
-    min-height: 0;
-    flex-wrap: wrap;
-    padding: 24px 16px 18px;
-  }
-
-  body.change-list #content > .admin-page-heading h1 {
-    flex-basis: 220px;
-    font-size: 26px;
-  }
-}

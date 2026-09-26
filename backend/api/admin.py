@@ -54,6 +54,7 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
     list_display = ("name", "user_count")
+    list_filter = ("name",)
     search_fields = ("name",)
 
     @admin.display(description="Users")
@@ -105,6 +106,7 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(CompanyBrandPreference)
 class CompanyBrandPreferenceAdmin(admin.ModelAdmin):
     list_display = ("company", "font_family", "brand_style", "updated_at")
+    list_filter = ("company", "font_family", "brand_style", "updated_at")
     search_fields = ("company__company_name", "font_family", "brand_style")
 
 
