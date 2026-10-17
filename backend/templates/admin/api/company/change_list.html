@@ -1,5 +1,5 @@
 {% extends "admin/change_list.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block content_title %}
   {% if title %}
@@ -7,7 +7,7 @@
       <h1>{{ title }}</h1>
       <ul class="object-tools">
         <li>
-          <a href="{% url 'admin:api_company_create_from_url' %}" class="addlink">New</a>
+          <a href="{% url 'admin:api_company_create_from_url' %}" class="addlink" data-company-create-open>New</a>
         </li>
       </ul>
     </div>
@@ -15,3 +15,63 @@
 {% endblock %}
 
 {% block object-tools %}{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  <dialog class="company-create-dialog" id="company-create-dialog" aria-labelledby="company-create-title">
+    <div class="company-create-dialog__header">
+      <div>
+        <span class="company-create-dialog__icon" aria-hidden="true">↗</span>
+        <div>
+          <p class="company-create-dialog__eyebrow">Company setup</p>
+          <h2 id="company-create-title">Add a company</h2>
+          <p class="company-create-dialog__subtitle">Start with a website. We’ll find the details for you.</p>
+        </div>
+      </div>
+      <button class="company-create-dialog__close" type="button" data-company-create-close aria-label="Close">×</button>
+    </div>
+
+    <form class="company-create-dialog__body" id="company-create-form">
+      <div class="field-group">
+        <label for="company-website-url">Company website</label>
+        <input type="url" id="company-website-url" name="website_url" placeholder="https://example.com" required autofocus>
+        <p class="company-create-dialog__hint">We’ll use this to collect the company’s brand, contact and social details.</p>
+      </div>
+
+      <div class="ai-wait-panel ai-wait-panel--company" id="company-create-loading" role="status" aria-live="polite" hidden>
+        <div class="ai-wait-art" aria-hidden="true">
+          <span class="ai-wait-art__orbit ai-wait-art__orbit--one"></span>
+          <span class="ai-wait-art__orbit ai-wait-art__orbit--two"></span>
+          <div class="ai-wait-art__card">
+            <span class="ai-wait-art__card-mark"></span>
+            <span class="ai-wait-art__card-line"></span>
+            <span class="ai-wait-art__card-line ai-wait-art__card-line--short"></span>
+          </div>
+          <span class="ai-wait-art__spark ai-wait-art__spark--one">✦</span>
+          <span class="ai-wait-art__spark ai-wait-art__spark--two">✧</span>
+        </div>
+        <div class="ai-wait-copy">
+          <span class="ai-wait-badge"><span></span> AI at work</span>
+          <h3>Getting to know your brand</h3>
+          <p id="company-create-progress">Connecting to the website…</p>
+          <span class="ai-wait-note">This can take a little while. Keep this window open.</span>
+        </div>
+      </div>
+
+      <div class="company-create-dialog__error" id="company-create-error" role="alert" hidden></div>
+
+      <div class="company-create-dialog__actions">
+        <button class="company-create-dialog__cancel" type="button" data-company-create-close>Cancel</button>
+        <button class="primary-action" type="submit" id="company-create-submit">
+          <span aria-hidden="true">⇢</span>
+          <span id="company-create-submit-label">Extract &amp; create company</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script defer src="{% static 'mecard/js/company_create_modal.js' %}"></script>
+{% endblock %}

@@ -1,388 +1,1536 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
+const generationMessages = [
+  'Analyzing your reference design',
+  'Creating different card compositions',
+  'Applying your company brand colors',
+  'Building polished card layouts',
+  'Preparing your design previews',
+];
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
+  if (parts.length === 2) {
+    return parts.pop().split(';').shift();
+  }
+  return '';
 }
 
-function parseAspectRatio(ratioStr) {
-  if (!ratioStr) return 1.6;
-  const parts = ratioStr.split(':').map(Number);
-  if (parts.length === 2 && parts[1] !== 0) return parts[0] / parts[1];
-  return 1.6;
+async function readApiResponse(response, fallbackMessage) {
+  const responseText = await response.text();
+
+  let data;
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    if (response.redirected) {
+      throw new Error(
+        'Your session may have expired. Refresh the page, sign in again, and retry.'
+      );
+    }
+
+    if (response.status === 403) {
+      throw new Error(
+        'The request was blocked. Refresh the page and try again.'
+      );
+    }
+
+    if (response.status === 404) {
+      throw new Error(
+        'The card API endpoint was not found. Restart the backend and refresh this page.'
+      );
+    }
+
+    const errorPage = new DOMParser().parseFromString(
+      responseText,
+      'text/html'
+    );
+
+    const serverMessage =
+      errorPage.querySelector('.exception_value')?.textContent ||
+      errorPage.querySelector('title')?.textContent;
+
+    const detail = serverMessage
+      ? ` Server detail: ${serverMessage
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 300)}`
+      : '';
+
+    throw new Error(
+      `${fallbackMessage} The server returned an unexpected page (HTTP ${response.status}).${detail}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data.error ||
+        data.detail ||
+        fallbackMessage
+    );
+  }
+
+  return data;
 }
 
-function VariantCard({ card, index, isSelected, onSelect, registerIframe, aspectRatio }) {
-  // Render at a fixed native size matching the real card aspect ratio,
-  // then CSS-scale the whole iframe down. Since the AI now outputs ONLY
-  // the card element (no page chrome), scaling shows the FULL card with
-  // no internal scrollbar needed.
-  const nativeWidth = 480;
-  const nativeHeight = Math.round(nativeWidth / aspectRatio);
-  const displayWidth = 300;
-  const scale = displayWidth / nativeWidth;
-  const displayHeight = Math.round(nativeHeight * scale);
+
+/* ============================================================
+   Variant Card
+   ============================================================ */
+
+function VariantCard({
+  card,
+  index,
+  isSelected,
+  onToggle,
+  aspectRatio,
+  disabled,
+}) {
+  /*
+   * These are the native design canvas dimensions.
+   *
+   * Horizontal:
+   * 856 x 540
+   *
+   * Vertical:
+   * 540 x 856
+   *
+   * The AI generator should generate HTML using the same canvas.
+   */
+
+  const nativeWidth =
+    aspectRatio >= 1
+      ? 856
+      : 540;
+
+  const nativeHeight =
+    aspectRatio >= 1
+      ? 540
+      : 856;
+
+  const previewRef = useRef(null);
+  const [previewWidth, setPreviewWidth] = useState(nativeWidth);
+
+  useEffect(() => {
+    const preview = previewRef.current;
+
+    if (!preview) {
+      return undefined;
+    }
+
+    const updateWidth = () => {
+      const width = preview.clientWidth;
+
+      if (width > 0) {
+        setPreviewWidth(Math.min(nativeWidth, width));
+      }
+    };
+
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    resizeObserver.observe(preview);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [nativeWidth]);
+
+  const scale = previewWidth / nativeWidth;
 
   return (
-    <div style={{
-      border: isSelected ? '2px solid var(--brand)' : '1px solid var(--line)',
-      borderRadius: 12, overflow: 'hidden', background: 'var(--surface-soft)',
-    }}>
-      <div style={{ padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--line)' }}>
-        <strong style={{ fontSize: 12 }}>Variant {index + 1}</strong>
-        {isSelected ? (
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--brand)' }}>SELECTED</span>
-        ) : (
-          <button
-            onClick={() => onSelect(card.id)}
-            style={{ fontSize: 11, fontWeight: 700, background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer', textDecoration: 'underline' }}
+    <div
+      style={{
+        border: isSelected
+          ? '2px solid var(--brand)'
+          : '1px solid var(--line)',
+
+        borderRadius: 14,
+        overflow: 'hidden',
+
+        background: isSelected
+          ? 'rgba(31, 111, 139, .06)'
+          : 'var(--surface)',
+
+        boxShadow: isSelected
+          ? '0 0 0 3px rgba(31, 111, 139, .13)'
+          : '0 8px 22px rgba(20, 40, 55, .08)',
+
+        transition:
+          'border-color .18s ease, box-shadow .18s ease, background .18s ease',
+      }}
+    >
+      {/* Variant header */}
+      <div
+        style={{
+          minHeight: 58,
+          boxSizing: 'border-box',
+          padding: '10px 14px',
+
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
+        <div>
+          <strong
+            style={{
+              display: 'block',
+              color: 'var(--ink)',
+              fontSize: 13,
+            }}
           >
-            Select this one
-          </button>
-        )}
-      </div>
-      <div style={{
-        width: displayWidth, height: displayHeight, margin: '14px auto',
-        overflow: 'hidden', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)',
-      }}>
-        <iframe
-          ref={(el) => registerIframe(card.id, el)}
-          title={`variant-${index}`}
-          srcDoc={card.preview_html}
+            Design {index + 1}
+          </strong>
+
+          <span
+            style={{
+              color: 'var(--muted)',
+              fontSize: 11,
+            }}
+          >
+            Preview
+          </span>
+        </div>
+
+        <label
           style={{
-            width: nativeWidth,
-            height: nativeHeight,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+
+            flex: '0 0 auto',
+
+            border: isSelected
+              ? '1px solid var(--brand)'
+              : '1px solid var(--line)',
+
+            borderRadius: 999,
+            padding: '7px 11px',
+
+            color: isSelected
+              ? 'var(--brand-deep)'
+              : 'var(--muted)',
+
+            background: isSelected
+              ? 'var(--surface)'
+              : 'transparent',
+
+            fontSize: 11,
+            fontWeight: 700,
+
+            cursor: disabled
+              ? 'not-allowed'
+              : 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            disabled={disabled}
+            onChange={() => onToggle(card.id)}
+            style={{
+              width: 15,
+              height: 15,
+              margin: 0,
+              accentColor: 'var(--brand)',
+            }}
+          />
+
+          {isSelected ? 'Selected' : 'Select'}
+        </label>
+      </div>
+
+      {/* Preview */}
+      <div
+        ref={previewRef}
+        style={{
+          position: 'relative',
+
+          width: 'calc(100% - 28px)',
+          maxWidth: nativeWidth,
+
+          /*
+           * The preview container keeps the correct card ratio.
+           */
+          aspectRatio: `${nativeWidth} / ${nativeHeight}`,
+
+          margin: '14px auto',
+
+          overflow: 'hidden',
+
+          borderRadius: 9,
+
+          background: '#f1f4f6',
+
+          boxShadow:
+            '0 8px 22px rgba(15, 35, 50, .13)',
+        }}
+      >
+        <iframe
+          title={`Design ${index + 1} preview`}
+          srcDoc={card.preview_html}
+          scrolling="no"
+          style={{
+            position: 'absolute',
+
+            top: 0,
+            left: 0,
+
+            width: `${nativeWidth}px`,
+            height: `${nativeHeight}px`,
+
             border: 0,
+
             background: '#fff',
+
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
+
+            pointerEvents: 'none',
           }}
-          scrolling="no"
         />
       </div>
     </div>
   );
 }
 
-function CardGeneratorApp({ companyId, initialCategories }) {
+
+/* ============================================================
+   Card Generator
+   ============================================================ */
+
+function CardGeneratorApp({
+  companyId,
+  initialCategories,
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const [categories] = useState(initialCategories);
-  const [categorySlug, setCategorySlug] = useState(
-    initialCategories.length ? initialCategories[0].slug : ''
+  const [categories] = useState(
+    Array.isArray(initialCategories)
+      ? initialCategories
+      : []
   );
-  const [variantCount, setVariantCount] = useState(3);
-  const [userPrompt, setUserPrompt] = useState('');
-  const [referenceImage, setReferenceImage] = useState(null);
-  const [referenceImagePreviewUrl, setReferenceImagePreviewUrl] = useState(null);
-  const [variants, setVariants] = useState([]);
-  const [generatedAspectRatio, setGeneratedAspectRatio] = useState(1.6);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [selectedId, setSelectedId] = useState(null);
 
-  const liveNamesRef = useRef({ company_name: '', tagline: '' });
-  const iframeRefs = useRef({});
-  const fileInputRef = useRef(null);
+  const [categorySlug, setCategorySlug] = useState(
+    initialCategories.length
+      ? initialCategories[0].slug
+      : ''
+  );
 
-  const registerIframe = useCallback((id, el) => {
-    iframeRefs.current[id] = el;
-  }, []);
+  const [orientation, setOrientation] =
+    useState('horizontal');
 
-  // Expose a global open function so the plain Django/JS "Create Card"
-  // link (rendered outside React, in change_form.html) can trigger this
-  // modal without needing its own toggle logic.
+  const [variantCount, setVariantCount] =
+    useState(3);
+
+  const [userPrompt, setUserPrompt] =
+    useState('');
+
+  const [referenceImage, setReferenceImage] =
+    useState(null);
+
+  const [
+    referenceImagePreviewUrl,
+    setReferenceImagePreviewUrl,
+  ] = useState(null);
+
+  const [variants, setVariants] =
+    useState([]);
+
+  const [generatedAspectRatio, setGeneratedAspectRatio] =
+    useState(1.6);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [loadingMessageIndex, setLoadingMessageIndex] =
+    useState(0);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [selectedIds, setSelectedIds] =
+    useState([]);
+
+  const [savedIds, setSavedIds] =
+    useState([]);
+
+  const fileInputRef =
+    useRef(null);
+
+
+  /* ============================================================
+     Loading message rotation
+     ============================================================ */
+
   useEffect(() => {
-    window.mecardOpenCardGenerator = () => setIsOpen(true);
-    return () => { delete window.mecardOpenCardGenerator; };
-  }, []);
-
-  // Live text sync into open preview iframes when the Django form's
-  // company_name / tagline fields change, while the modal is open.
-  useEffect(() => {
-    if (!isOpen) return;
-    const nameInput = document.getElementById('id_company_name');
-    const taglineInput = document.getElementById('id_tagline');
-
-    liveNamesRef.current.company_name = nameInput ? nameInput.value : '';
-    liveNamesRef.current.tagline = taglineInput ? taglineInput.value : '';
-
-    function syncTextInPreviews(oldValue, newValue) {
-      if (!oldValue || oldValue === newValue) return;
-      Object.values(iframeRefs.current).forEach((iframe) => {
-        if (!iframe || !iframe.contentDocument) return;
-        const walker = document.createTreeWalker(iframe.contentDocument.body, NodeFilter.SHOW_TEXT);
-        let node;
-        while ((node = walker.nextNode())) {
-          if (node.nodeValue.includes(oldValue)) {
-            node.nodeValue = node.nodeValue.split(oldValue).join(newValue);
-          }
-        }
-      });
+    if (!loading) {
+      setLoadingMessageIndex(0);
+      return undefined;
     }
 
-    function onNameInput(e) {
-      syncTextInPreviews(liveNamesRef.current.company_name, e.target.value);
-      liveNamesRef.current.company_name = e.target.value;
-    }
-    function onTaglineInput(e) {
-      syncTextInPreviews(liveNamesRef.current.tagline, e.target.value);
-      liveNamesRef.current.tagline = e.target.value;
-    }
-
-    if (nameInput) nameInput.addEventListener('input', onNameInput);
-    if (taglineInput) taglineInput.addEventListener('input', onTaglineInput);
+    const timer = window.setInterval(() => {
+      setLoadingMessageIndex(
+        (index) =>
+          (index + 1) %
+          generationMessages.length
+      );
+    }, 3000);
 
     return () => {
-      if (nameInput) nameInput.removeEventListener('input', onNameInput);
-      if (taglineInput) taglineInput.removeEventListener('input', onTaglineInput);
+      window.clearInterval(timer);
     };
-  }, [isOpen, variants]);
+  }, [loading]);
 
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0] || null;
+
+  /* ============================================================
+     Open modal from Django
+     ============================================================ */
+
+  useEffect(() => {
+    window.mecardOpenCardGenerator = () => {
+      setIsOpen(true);
+    };
+
+    return () => {
+      delete window.mecardOpenCardGenerator;
+    };
+  }, []);
+
+
+  /* ============================================================
+     Image select
+     ============================================================ */
+
+  const handleImageSelect = (event) => {
+    const file =
+      event.target.files?.[0] || null;
+
     setReferenceImage(file);
-    if (referenceImagePreviewUrl) URL.revokeObjectURL(referenceImagePreviewUrl);
-    setReferenceImagePreviewUrl(file ? URL.createObjectURL(file) : null);
+
+    if (referenceImagePreviewUrl) {
+      URL.revokeObjectURL(
+        referenceImagePreviewUrl
+      );
+    }
+
+    if (file) {
+      setReferenceImagePreviewUrl(
+        URL.createObjectURL(file)
+      );
+    } else {
+      setReferenceImagePreviewUrl(null);
+    }
   };
+
+
+  /* ============================================================
+     Clear image
+     ============================================================ */
 
   const clearImage = () => {
     setReferenceImage(null);
-    if (referenceImagePreviewUrl) URL.revokeObjectURL(referenceImagePreviewUrl);
+
+    if (referenceImagePreviewUrl) {
+      URL.revokeObjectURL(
+        referenceImagePreviewUrl
+      );
+    }
+
     setReferenceImagePreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
+
+  /* ============================================================
+     Generate
+     ============================================================ */
+
   const generate = useCallback(async () => {
-    if (!categorySlug) return;
+    if (!categorySlug || loading) {
+      return;
+    }
+
     setLoading(true);
     setError('');
-    setVariants([]);
 
-    const selectedCategory = categories.find((c) => c.slug === categorySlug);
-    const ratio = parseAspectRatio(selectedCategory && selectedCategory.default_aspect_ratio);
+    setVariants([]);
+    setSelectedIds([]);
+    setSavedIds([]);
+
+    const ratio =
+      orientation === 'vertical'
+        ? 540 / 856
+        : 856 / 540;
 
     try {
-      let response;
+      const formData = new FormData();
 
-      if (referenceImage) {
-        const formData = new FormData();
-        formData.append('company_id', companyId);
-        formData.append('category_slug', categorySlug);
-        formData.append('name', 'ID Card');
-        formData.append('variant_count', variantCount);
-        if (userPrompt) formData.append('user_prompt', userPrompt);
-        formData.append('reference_image', referenceImage);
+      formData.append(
+        'company_id',
+        companyId
+      );
 
-        response = await fetch('/api/cards/generate/', {
-          method: 'POST',
-          headers: { 'X-CSRFToken': getCookie('csrftoken') },
-          credentials: 'same-origin',
-          body: formData,
-        });
-      } else {
-        response = await fetch('/api/cards/generate/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-          },
-          credentials: 'same-origin',
-          body: JSON.stringify({
-            company_id: companyId,
-            category_slug: categorySlug,
-            name: 'ID Card',
-            variant_count: variantCount,
-            user_prompt: userPrompt || undefined,
-          }),
-        });
+      formData.append(
+        'category_slug',
+        categorySlug
+      );
+
+      formData.append(
+        'orientation',
+        orientation
+      );
+
+      formData.append(
+        'variant_count',
+        String(variantCount)
+      );
+
+      if (userPrompt.trim()) {
+        formData.append(
+          'user_prompt',
+          userPrompt.trim()
+        );
       }
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Generation failed.');
+      if (referenceImage) {
+        formData.append(
+          'reference_image',
+          referenceImage
+        );
+      }
 
-      setVariants(data.variants);
-      setGeneratedAspectRatio(ratio);
-      if (data.variants.length) setSelectedId(data.variants[0].id);
+      const response = await fetch(
+        '/api/cards/generate/',
+        {
+          method: 'POST',
+
+          headers: {
+            Accept: 'application/json',
+
+            'X-CSRFToken':
+              getCookie('csrftoken'),
+          },
+
+          credentials: 'same-origin',
+
+          body: formData,
+        }
+      );
+
+      const data =
+        await readApiResponse(
+          response,
+          'Card generation failed.'
+        );
+
+      if (
+        !Array.isArray(data.variants)
+      ) {
+        throw new Error(
+          'The server returned an invalid card preview response.'
+        );
+      }
+
+      /*
+       * Make absolutely sure every variant has
+       * a unique frontend ID.
+       */
+      const normalizedVariants =
+        data.variants.map(
+          (variant, index) => ({
+            ...variant,
+
+            id:
+              variant.id ||
+              `variant-${Date.now()}-${index}`,
+
+            index:
+              typeof variant.index === 'number'
+                ? variant.index
+                : index,
+          })
+        );
+
+      setVariants(
+        normalizedVariants
+      );
+
+      setGeneratedAspectRatio(
+        ratio
+      );
     } catch (err) {
-      setError(err.message);
+      setError(
+        err?.message ||
+        'Card generation failed.'
+      );
     } finally {
       setLoading(false);
     }
-  }, [companyId, categorySlug, variantCount, userPrompt, referenceImage, categories]);
+  }, [
+    companyId,
+    categorySlug,
+    orientation,
+    variantCount,
+    userPrompt,
+    referenceImage,
+    loading,
+  ]);
 
-  const selectVariant = async (id) => {
+
+  /* ============================================================
+     Select / deselect variant
+     ============================================================ */
+
+  const toggleVariant = (id) => {
+    setSelectedIds(
+      (selected) =>
+        selected.includes(id)
+          ? selected.filter(
+              (selectedId) =>
+                selectedId !== id
+            )
+          : [...selected, id]
+    );
+
+    setError('');
+  };
+
+
+  /* ============================================================
+     Save selected variants
+     ============================================================ */
+
+  const saveSelectedVariants = async () => {
+    const selectedVariants = variants.filter(
+      (variant) => selectedIds.includes(variant.id)
+    );
+
+    if (!selectedVariants.length || saving || savedIds.length) {
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
     try {
-      await fetch(`/api/cards/${id}/select/`, {
+      const previewTokens = selectedVariants.map(
+        (variant) => variant.preview_token
+      );
+
+      if (previewTokens.some((token) => !token)) {
+        throw new Error(
+          'A selected preview has expired or is invalid. Generate the designs again before saving.'
+        );
+      }
+
+      const response = await fetch('/api/cards/save-generated/', {
         method: 'POST',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken'),
+        },
         credentials: 'same-origin',
+        body: JSON.stringify({ preview_tokens: previewTokens }),
       });
-      setSelectedId(id);
+
+      await readApiResponse(
+        response,
+        'Could not save the selected card designs.'
+      );
+
+      setSavedIds(
+        selectedVariants.map((variant) => variant.id)
+      );
+
     } catch (err) {
-      setError('Could not select this variant.');
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (!isOpen) return null;
+
+  /* ============================================================
+     Close modal
+     ============================================================ */
+
+  const closeModal = () => {
+    if (loading || saving) {
+      return;
+    }
+
+    setIsOpen(false);
+  };
+
+
+  if (!isOpen) {
+    return null;
+  }
+
+
+  /* ============================================================
+     Render
+     ============================================================ */
 
   return (
     <div
-      onClick={() => setIsOpen(false)}
+      onClick={closeModal}
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,.55)',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        padding: '5vh 24px', overflowY: 'auto',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+
+        background:
+          'rgba(0, 0, 0, .72)',
+
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+
+        padding: '4vh 24px',
+
+        overflowY: 'auto',
       }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) =>
+          event.stopPropagation()
+        }
         style={{
-          width: 'min(1150px, 100%)',
-          background: 'var(--surface)', borderRadius: 16, boxShadow: 'var(--shadow)',
-          padding: 28,
+          width:
+            'min(1450px, 100%)',
+
+          maxHeight: '92vh',
+
+          display: 'flex',
+          flexDirection: 'column',
+
+          background:
+            'var(--surface)',
+
+          border:
+            '1px solid var(--line)',
+
+          borderRadius: 16,
+
+          boxShadow:
+            '0 30px 90px rgba(0,0,0,.55)',
+
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0 }}>Create Card</h2>
+
+        {/* ======================================================
+            Modal Header
+        ====================================================== */}
+
+        <div
+          style={{
+            flex: '0 0 auto',
+
+            display: 'flex',
+            justifyContent:
+              'space-between',
+            alignItems: 'center',
+
+            padding:
+              '16px 22px',
+
+            borderBottom:
+              '1px solid var(--line)',
+          }}
+        >
+          <div>
+            <h2
+              style={{
+                margin: 0,
+                color: 'var(--ink)',
+                fontSize: 18,
+              }}
+            >
+              Create Card
+            </h2>
+
+            <p
+              style={{
+                margin:
+                  '3px 0 0',
+                color:
+                  'var(--muted)',
+                fontSize: 11,
+              }}
+            >
+              Generate multiple
+              card designs and
+              select the ones you
+              want to save.
+            </p>
+          </div>
+
           <button
-            onClick={() => setIsOpen(false)}
-            style={{ border: 0, background: 'none', fontSize: 24, lineHeight: 1, cursor: 'pointer', color: 'var(--muted)' }}
-            aria-label="Close"
+            type="button"
+            onClick={closeModal}
+            disabled={
+              loading || saving
+            }
+            style={{
+              width: 36,
+              height: 36,
+
+              border:
+                '1px solid var(--line)',
+
+              borderRadius: 8,
+
+              background:
+                'var(--surface-soft)',
+
+              color: 'var(--ink)',
+
+              fontSize: 24,
+
+              lineHeight: 1,
+
+              cursor:
+                loading || saving
+                  ? 'not-allowed'
+                  : 'pointer',
+
+              opacity:
+                loading || saving
+                  ? 0.5
+                  : 1,
+            }}
           >
             ×
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-          <div style={{ flex: '1 1 220px' }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-              Card category
-            </label>
-            <select
-              value={categorySlug}
-              onChange={(e) => setCategorySlug(e.target.value)}
-              style={{ width: '100%', minHeight: 42, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface-soft)', color: 'var(--ink)', padding: '0 10px' }}
+
+        {/* ======================================================
+            Scrollable Body
+        ====================================================== */}
+
+        <div
+          style={{
+            flex: '1 1 auto',
+
+            minHeight: 0,
+
+            overflowY: 'auto',
+
+            padding: 22,
+          }}
+        >
+
+          {/* ====================================================
+              Controls
+          ==================================================== */}
+
+          <div
+            style={{
+              display: 'grid',
+
+              gridTemplateColumns:
+                'minmax(220px, 1fr) 130px 170px minmax(260px, 2fr)',
+
+              gap: 14,
+
+              marginBottom: 16,
+            }}
+          >
+
+            {/* Category */}
+
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color:
+                    'var(--ink)',
+                }}
+              >
+                Card category
+              </label>
+
+              <select
+                value={categorySlug}
+                onChange={(event) =>
+                  setCategorySlug(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  loading || saving
+                }
+                style={{
+                  width: '100%',
+                  minHeight: 42,
+
+                  border:
+                    '1px solid var(--line)',
+
+                  borderRadius: 8,
+
+                  background:
+                    'var(--surface-soft)',
+
+                  color:
+                    'var(--ink)',
+
+                  padding:
+                    '0 10px',
+                }}
+              >
+                {categories.map(
+                  (category) => (
+                    <option
+                      key={
+                        category.slug
+                      }
+                      value={
+                        category.slug
+                      }
+                    >
+                      {category.name}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+
+            {/* Variants */}
+
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color:
+                    'var(--ink)',
+                }}
+              >
+                Variants
+              </label>
+
+              <select
+                value={variantCount}
+                onChange={(event) =>
+                  setVariantCount(
+                    Number(
+                      event.target.value
+                    )
+                  )
+                }
+                disabled={
+                  loading || saving
+                }
+                style={{
+                  width: '100%',
+                  minHeight: 42,
+
+                  border:
+                    '1px solid var(--line)',
+
+                  borderRadius: 8,
+
+                  background:
+                    'var(--surface-soft)',
+
+                  color:
+                    'var(--ink)',
+
+                  padding:
+                    '0 10px',
+                }}
+              >
+                {[1, 2, 3, 4, 5, 6].map(
+                  (number) => (
+                    <option
+                      key={number}
+                      value={number}
+                    >
+                      {number}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+
+            {/* Orientation */}
+
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color:
+                    'var(--ink)',
+                }}
+              >
+                Orientation
+              </label>
+
+              <select
+                value={orientation}
+                onChange={(event) =>
+                  setOrientation(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  loading || saving
+                }
+                style={{
+                  width: '100%',
+                  minHeight: 42,
+
+                  border:
+                    '1px solid var(--line)',
+
+                  borderRadius: 8,
+
+                  background:
+                    'var(--surface-soft)',
+
+                  color:
+                    'var(--ink)',
+
+                  padding:
+                    '0 10px',
+                }}
+              >
+                <option value="horizontal">
+                  Horizontal
+                </option>
+
+                <option value="vertical">
+                  Vertical
+                </option>
+              </select>
+            </div>
+
+
+            {/* Prompt */}
+
+            <div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color:
+                    'var(--ink)',
+                }}
+              >
+                Design instructions
+                (optional)
+              </label>
+
+              <input
+                type="text"
+                value={userPrompt}
+                onChange={(event) =>
+                  setUserPrompt(
+                    event.target.value
+                  )
+                }
+                disabled={
+                  loading || saving
+                }
+                placeholder="e.g. premium, minimal, rounded corners"
+                style={{
+                  width: '100%',
+                  minHeight: 42,
+
+                  boxSizing:
+                    'border-box',
+
+                  border:
+                    '1px solid var(--line)',
+
+                  borderRadius: 8,
+
+                  background:
+                    'var(--surface-soft)',
+
+                  color:
+                    'var(--ink)',
+
+                  padding:
+                    '0 12px',
+                }}
+              />
+            </div>
+          </div>
+
+
+          {/* ====================================================
+              Reference Image
+          ==================================================== */}
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+
+              marginBottom: 20,
+
+              padding:
+                '12px 14px',
+
+              border:
+                '1px solid var(--line)',
+
+              borderRadius: 10,
+
+              background:
+                'var(--surface-soft)',
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+              }}
             >
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color:
+                    'var(--ink)',
+                }}
+              >
+                Reference image
+              </label>
 
-          <div style={{ flex: '0 0 140px' }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-              Variants
-            </label>
-            <select
-              value={variantCount}
-              onChange={(e) => setVariantCount(Number(e.target.value))}
-              style={{ width: '100%', minHeight: 42, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface-soft)', color: 'var(--ink)', padding: '0 10px' }}
-            >
-              {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-
-          <div style={{ flex: '2 1 260px' }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-              Design instructions (optional)
-            </label>
-            <input
-              type="text"
-              value={userPrompt}
-              onChange={(e) => setUserPrompt(e.target.value)}
-              placeholder="e.g. minimal, dark theme, rounded corners"
-              style={{ width: '100%', minHeight: 42, boxSizing: 'border-box', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface-soft)', color: 'var(--ink)', padding: '0 12px' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ flex: '1 1 260px' }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-              Reference image (optional)
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleImageSelect}
-                style={{ fontSize: 12, color: 'var(--muted)' }}
+                onChange={
+                  handleImageSelect
+                }
+                disabled={
+                  loading || saving
+                }
+                style={{
+                  fontSize: 12,
+                  color:
+                    'var(--muted)',
+                }}
               />
-              {referenceImage && (
+
+              <p
+                style={{
+                  margin:
+                    '6px 0 0',
+
+                  fontSize: 11,
+
+                  color:
+                    'var(--muted)',
+                }}
+              >
+                The AI will use this
+                image as the design
+                reference for layout,
+                spacing, typography,
+                shapes and colors. Each
+                result will follow a
+                different card shown
+                in the reference, when
+                available.
+              </p>
+            </div>
+
+
+            {referenceImagePreviewUrl && (
+              <>
+                <img
+                  src={
+                    referenceImagePreviewUrl
+                  }
+                  alt="Reference"
+                  style={{
+                    width: 80,
+                    height: 80,
+
+                    objectFit: 'cover',
+
+                    borderRadius: 8,
+
+                    border:
+                      '1px solid var(--line)',
+                  }}
+                />
+
                 <button
                   type="button"
                   onClick={clearImage}
-                  style={{ fontSize: 11, fontWeight: 700, background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer', textDecoration: 'underline' }}
+                  disabled={
+                    loading || saving
+                  }
+                  style={{
+                    border: 0,
+                    background:
+                      'transparent',
+
+                    color:
+                      'var(--muted)',
+
+                    cursor: 'pointer',
+
+                    fontSize: 11,
+                    fontWeight: 700,
+
+                    textDecoration:
+                      'underline',
+                  }}
                 >
                   Remove
                 </button>
-              )}
-            </div>
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--muted)' }}>
-              Upload an example card/badge design — the AI will use it as style inspiration while still applying this company's brand colors.
-            </p>
+              </>
+            )}
+
+
+            <button
+              type="button"
+              onClick={generate}
+              disabled={
+                loading ||
+                saving ||
+                !categorySlug
+              }
+              className="primary-action"
+              style={{
+                minWidth: 110,
+
+                opacity:
+                  loading ||
+                  saving
+                    ? 0.6
+                    : 1,
+              }}
+            >
+              {loading
+                ? 'Designing…'
+                : 'Generate'}
+            </button>
           </div>
 
-          {referenceImagePreviewUrl && (
-            <img
-              src={referenceImagePreviewUrl}
-              alt="Reference preview"
-              style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }}
-            />
+
+          {/* ====================================================
+              Loading
+          ==================================================== */}
+
+          {loading && (
+            <div
+              className="ai-wait-panel ai-wait-panel--card"
+              role="status"
+              aria-live="polite"
+              style={{
+                marginBottom: 20,
+              }}
+            >
+              <div
+                className="ai-wait-art"
+                aria-hidden="true"
+              >
+                <span className="ai-wait-art__orbit ai-wait-art__orbit--one"></span>
+
+                <span className="ai-wait-art__orbit ai-wait-art__orbit--two"></span>
+
+                <div className="ai-wait-art__card">
+                  <span className="ai-wait-art__card-mark"></span>
+                  <span className="ai-wait-art__card-line"></span>
+                  <span className="ai-wait-art__card-line ai-wait-art__card-line--short"></span>
+                </div>
+
+                <span className="ai-wait-art__spark ai-wait-art__spark--one">
+                  ✦
+                </span>
+
+                <span className="ai-wait-art__spark ai-wait-art__spark--two">
+                  ✧
+                </span>
+              </div>
+
+              <div className="ai-wait-copy">
+                <span className="ai-wait-badge">
+                  <span></span>
+                  AI at work
+                </span>
+
+                <h3>
+                  Designing your cards
+                </h3>
+
+                <p>
+                  {
+                    generationMessages[
+                      loadingMessageIndex
+                    ]
+                  }
+                  …
+                </p>
+
+                <span className="ai-wait-note">
+                  Creating {variantCount}{' '}
+                  distinct designs.
+                </span>
+              </div>
+            </div>
           )}
 
-          <button
-            onClick={generate}
-            disabled={loading || !categorySlug}
-            className="primary-action"
-            style={{ opacity: loading ? 0.6 : 1, marginLeft: 'auto' }}
-          >
-            {loading ? 'Generating…' : 'Generate'}
-          </button>
+
+          {/* ====================================================
+              Error
+          ==================================================== */}
+
+          {error && (
+            <div
+              style={{
+                marginBottom: 18,
+
+                border:
+                  '1px solid #e6a6a6',
+
+                borderRadius: 8,
+
+                padding:
+                  '10px 12px',
+
+                color: '#9a3030',
+
+                background:
+                  '#fff1f1',
+
+                fontSize: 12,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+
+          {/* ====================================================
+              Variants
+          ==================================================== */}
+
+          {variants.length > 0 && (
+            <>
+              <div
+                style={{
+                  display: 'grid',
+
+                  gridTemplateColumns:
+                    `repeat(${Math.min(
+                      variants.length,
+                      3
+                    )}, minmax(0, 1fr))`,
+
+                  gap: 16,
+
+                  borderTop:
+                    '1px solid var(--line)',
+
+                  paddingTop: 20,
+                }}
+              >
+                {variants.map(
+                  (card, index) => (
+                    <VariantCard
+                      key={card.id}
+                      card={card}
+                      index={index}
+                      isSelected={selectedIds.includes(
+                        card.id
+                      )}
+                      onToggle={
+                        toggleVariant
+                      }
+                      aspectRatio={
+                        generatedAspectRatio
+                      }
+                      disabled={
+                        saving ||
+                        savedIds.length > 0
+                      }
+                    />
+                  )
+                )}
+              </div>
+
+
+              {/* ==================================================
+                  Save bar
+              ================================================== */}
+
+              <div
+                style={{
+                  display: 'flex',
+
+                  alignItems: 'center',
+
+                  justifyContent:
+                    'space-between',
+
+                  gap: 16,
+
+                  marginTop: 18,
+
+                  paddingTop: 16,
+
+                  borderTop:
+                    '1px solid var(--line)',
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    color:
+                      'var(--muted)',
+                    fontSize: 12,
+                  }}
+                >
+                  {savedIds.length
+                    ? `${savedIds.length} ${
+                        savedIds.length === 1
+                          ? 'design has'
+                          : 'designs have'
+                      } been saved.`
+                    : selectedIds.length
+                    ? `${selectedIds.length} ${
+                        selectedIds.length === 1
+                          ? 'design'
+                          : 'designs'
+                      } selected.`
+                    : 'Select one or more designs to save.'}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={
+                    saveSelectedVariants
+                  }
+                  disabled={
+                    !selectedIds.length ||
+                    saving ||
+                    savedIds.length > 0
+                  }
+                  className="primary-action"
+                  style={{
+                    opacity:
+                      !selectedIds.length ||
+                      saving ||
+                      savedIds.length > 0
+                        ? 0.6
+                        : 1,
+
+                    whiteSpace:
+                      'nowrap',
+                  }}
+                >
+                  {savedIds.length
+                    ? 'Saved'
+                    : saving
+                    ? 'Saving…'
+                    : `Save selected card${
+                        selectedIds.length ===
+                        1
+                          ? ''
+                          : 's'
+                      }${
+                        selectedIds.length
+                          ? ` (${selectedIds.length})`
+                          : ''
+                      }`}
+                </button>
+              </div>
+            </>
+          )}
         </div>
-
-        {error && (
-          <div style={{ marginBottom: 18, border: '1px solid #e6a6a6', borderRadius: 8, padding: '10px 12px', color: '#9a3030', background: '#fff1f1', fontSize: 12 }}>
-            {error}
-          </div>
-        )}
-
-        {variants.length > 0 && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${Math.min(variants.length, 3)}, minmax(0, 1fr))`,
-            gap: 16,
-            borderTop: '1px solid var(--line)',
-            paddingTop: 20,
-          }}>
-            {variants.map((card, i) => (
-              <VariantCard
-                key={card.id}
-                card={card}
-                index={i}
-                isSelected={card.id === selectedId}
-                onSelect={selectVariant}
-                registerIframe={registerIframe}
-                aspectRatio={generatedAspectRatio}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-const rootEl = document.getElementById('card-generator-root');
-if (rootEl) {
-  const companyId = rootEl.getAttribute('data-company-id');
-  const categoriesDataEl = document.getElementById('card-categories-data');
-  const initialCategories = categoriesDataEl ? JSON.parse(categoriesDataEl.textContent) : [];
-  ReactDOM.createRoot(rootEl).render(
-    <CardGeneratorApp companyId={companyId} initialCategories={initialCategories} />
+
+/* ============================================================
+   Bootstrap React
+   ============================================================ */
+
+const rootEl =
+  document.getElementById(
+    'card-generator-root'
   );
+
+if (rootEl) {
+  const companyId =
+    rootEl.getAttribute(
+      'data-company-id'
+    );
+
+  const categoriesDataEl =
+    document.getElementById(
+      'card-categories-data'
+    );
+
+  let initialCategories = [];
+
+  try {
+    initialCategories =
+      categoriesDataEl
+        ? JSON.parse(
+            categoriesDataEl.textContent
+          )
+        : [];
+  } catch (error) {
+    console.error(
+      'Unable to parse card categories:',
+      error
+    );
+  }
+
+  ReactDOM
+    .createRoot(rootEl)
+    .render(
+      <CardGeneratorApp
+        companyId={companyId}
+        initialCategories={
+          initialCategories
+        }
+      />
+    );
 }

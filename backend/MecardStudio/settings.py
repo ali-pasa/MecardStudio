@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,7 +49,10 @@ ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 
 AUTH_USER_MODEL = "api.User"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY = (
+    os.environ.get("GEMINI_API_KEY", "").strip()
+    or dotenv_values(BASE_DIR / ".env").get("GEMINI_API_KEY", "").strip()
+)
 
 INSTALLED_APPS = [
     'django.contrib.admin',

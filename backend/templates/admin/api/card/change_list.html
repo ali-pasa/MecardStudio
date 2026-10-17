@@ -1,0 +1,32 @@
+{% extends "admin/api/change_list.html" %}
+{% load static %}
+
+{% block content %}
+  {{ block.super }}
+  <dialog class="card-preview-dialog" id="card-preview-dialog" aria-labelledby="card-preview-title">
+    <div class="card-preview-dialog__header">
+      <div>
+        <p class="card-preview-dialog__eyebrow">Card design</p>
+        <h2 id="card-preview-title">Card preview</h2>
+      </div>
+      <button class="card-preview-dialog__close" type="button" data-card-preview-close aria-label="Close preview">×</button>
+    </div>
+    <div class="card-preview-dialog__body">
+      <div class="card-preview-stage" id="card-preview-stage" hidden>
+        <iframe
+          class="card-preview-frame"
+          id="card-preview-frame"
+          title="Card design preview"
+          sandbox=""
+          scrolling="no"
+        ></iframe>
+      </div>
+      <p class="card-preview-dialog__status" id="card-preview-status" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script defer src="{% static 'mecard/js/card_admin_preview.js' %}"></script>
+{% endblock %}

@@ -3,9 +3,11 @@ from django.contrib import admin
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import Group
-from django.urls import path
-from django.shortcuts import render
+from django.urls import path, reverse
+from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.utils.html import format_html
 from django.template.response import TemplateResponse
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from .audit import apply_request_audit
 from .models import (
@@ -16,6 +18,7 @@ from .models import (
     Role,
     User,
 )
+from .services.card_generation import category_for_card_orientation, render_preview_html
 
 
 class GroupAdmin(BaseGroupAdmin):
@@ -149,7 +152,46 @@ class CardCategoryAdmin(AuditAdminMixin, admin.ModelAdmin):
 
 @admin.register(Card)
 class CardAdmin(AuditAdminMixin, admin.ModelAdmin):
-    list_display = ("name", "company", "category", "is_active", "updated_at")
+    list_display = ("name", "preview_button", "company", "category", "is_active", "updated_at")
     list_filter = ("is_active", "category", "updated_at")
     search_fields = ("name", "public_slug", "company__company_name")
     list_select_related = ("company", "category")
+    change_list_template = "admin/api/card/change_list.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<path:object_id>/preview/",
+                self.admin_site.admin_view(self.preview_view),
+                name="api_card_preview",
+            ),
+        ]
+        return custom_urls + urls
+
+    @xframe_options_sameorigin
+    def preview_view(self, request, object_id):
+        if not self.has_view_permission(request):
+            return HttpResponseForbidden()
+
+        card = self.get_object(request, object_id)
+        if card is None:
+            raise Http404
+
+        metadata = card.meta_data if isinstance(card.meta_data, dict) else {}
+        orientation = metadata.get("orientation")
+        preview_category = category_for_card_orientation(card.category, orientation)
+        preview_html = render_preview_html(card.html_content, preview_category, card.company)
+        return HttpResponse(preview_html, content_type="text/html; charset=utf-8")
+
+    @admin.display(description="Preview")
+    def preview_button(self, obj):
+        metadata = obj.meta_data if isinstance(obj.meta_data, dict) else {}
+        return format_html(
+            '<button type="button" class="card-preview-trigger" '
+            'data-preview-url="{}" data-card-name="{}" '
+            'data-aspect-ratio="{}">Preview</button>',
+            reverse("admin:api_card_preview", args=[obj.pk]),
+            obj.name,
+            metadata.get("aspect_ratio") or obj.category.default_aspect_ratio,
+        )
