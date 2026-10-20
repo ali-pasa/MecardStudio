@@ -64,7 +64,7 @@ class CompanySerializer(serializers.ModelSerializer):
         model = Company
         fields = [
             'id', 'user', 'website_url', 'ip_address',
-            'is_active', 'meta_data', 'created_by', 'updated_by',
+            'is_active', 'meta_data', 'payload', 'created_by', 'updated_by',
             'company_name', 'tagline', 'about', 'industry',
             'address', 'phone', 'email', 'website',
             'linkedin_url', 'instagram_url', 'facebook_url',

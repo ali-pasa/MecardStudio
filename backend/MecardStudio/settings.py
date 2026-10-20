@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from pathlib import Path
 
-from dotenv import dotenv_values, load_dotenv
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,11 +48,23 @@ ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 # ============================
 
 AUTH_USER_MODEL = "api.User"
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-GEMINI_API_KEY = (
-    os.environ.get("GEMINI_API_KEY", "").strip()
-    or dotenv_values(BASE_DIR / ".env").get("GEMINI_API_KEY", "").strip()
+# Provider credentials. load_dotenv() above makes values from backend/.env
+# available here; environment variables can override them for deployments.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+ANTHROPIC_API_KEY = (
+    os.getenv("ANTHROPIC_API_KEY", "").strip()
+    or os.getenv("CLAUDE_API_KEY", "").strip()
 )
+OPENAI_API_KEY = (
+    os.getenv("OPENAI_API_KEY", "").strip()
+    or os.getenv("CODEX_API_KEY", "").strip()
+)
+AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").strip().lower()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1").strip()
+CODEX_MODEL = os.getenv("CODEX_MODEL", "gpt-5.1-codex").strip()
+AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "8192"))
 
 INSTALLED_APPS = [
     'django.contrib.admin',

@@ -21,8 +21,12 @@ from .services.card_generation import (
     encode_uploaded_image_to_data_uri,
     ensure_card_styling,
     generate_card_template,
+    is_renderable_card_template,
+    render_mock_card_template,
     render_preview_html,
     category_for_card_orientation,
+    card_fields_for_category,
+    card_placeholder,
 )
 
 class RequestAuditViewSetMixin:
@@ -273,6 +277,8 @@ class CardViewSet(viewsets.ModelViewSet):
         # ---------------------------------------------------------
 
         results = []
+        generation_notice = None
+        use_local_fallback = False
 
         for index in range(variant_count):
 
@@ -329,38 +335,62 @@ IMPORTANT:
 """
                 ).strip()
 
-            try:
-                html = generate_card_template(
-                    company=company,
-                    brand=brand,
-                    category=category,
-                    extra_instruction=variant_instruction,
-                    user_prompt=user_prompt,
-                    reference_image_url=reference_image_url,
-                    design_direction=design_direction,
+            fallback_direction = design_direction or CARD_DESIGN_DIRECTIONS[
+                index % len(CARD_DESIGN_DIRECTIONS)
+            ]["key"]
+            if use_local_fallback:
+                html = render_mock_card_template(
+                    company, brand, category, design_direction=fallback_direction
                 )
+            else:
+                try:
+                    html = generate_card_template(
+                        company=company,
+                        brand=brand,
+                        category=category,
+                        extra_instruction=variant_instruction,
+                        user_prompt=user_prompt,
+                        reference_image_url=reference_image_url,
+                        design_direction=design_direction,
+                    )
 
-            except Exception as exc:
-                return Response(
-                    {
-                        "error": (
-                            f"Template generation failed on variant "
-                            f"{index + 1}: {str(exc)}"
+                except Exception as exc:
+                    error_text = str(exc)
+                    is_quota_error = (
+                        getattr(exc, "status_code", None) == 429
+                        or "429" in error_text
+                        or "RESOURCE_EXHAUSTED" in error_text
+                    )
+                    if not is_quota_error:
+                        return Response(
+                            {
+                                "error": (
+                                    f"Template generation failed on variant "
+                                    f"{index + 1}: {error_text}"
+                                )
+                            },
+                            status=status.HTTP_502_BAD_GATEWAY,
                         )
-                    },
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
+
+                    use_local_fallback = True
+                    generation_notice = (
+                        "Gemini quota is exhausted. Showing locally generated "
+                        "card designs; try AI generation after the quota resets."
+                    )
+                    html = render_mock_card_template(
+                        company, brand, category, design_direction=fallback_direction
+                    )
 
             # -----------------------------------------------------
             # Validate generated template
             # -----------------------------------------------------
 
-            required_fields = category.required_fields or []
+            required_fields = card_fields_for_category(category)
 
             missing_fields = []
 
             for field in required_fields:
-                token = f"{{{{{field}}}}}"
+                token = card_placeholder(field)
 
                 if token not in html:
                     missing_fields.append(field)
@@ -381,7 +411,7 @@ You MUST include every missing field in the card.
 Required placeholder tokens:
 
 {", ".join(
-    f"{{{{{field}}}}}"
+    card_placeholder(field)
     for field in required_fields
 )}
 
@@ -418,37 +448,20 @@ The final HTML must contain every required placeholder exactly.
             missing_after_repair = []
 
             for field in required_fields:
-                token = f"{{{{{field}}}}}"
+                token = card_placeholder(field)
 
                 if token not in html:
                     missing_after_repair.append(field)
 
-            # If Gemini still failed to produce required data fields,
-            # use our deterministic designed fallback for this variant.
-            #
-            # This guarantees the user NEVER gets an empty card.
-            if missing_after_repair:
-                if reference_image_url:
-                    return Response(
-                        {
-                            "error": (
-                                f"Reference-based design {index + 1} did not "
-                                "include all required card fields. Please try "
-                                "again or use a clearer reference image."
-                            )
-                        },
-                        status=status.HTTP_502_BAD_GATEWAY,
-                    )
-                html = generate_card_template(
+            # Don't show partial HTML/CSS in the preview. Use the local,
+            # fully formed card if the model response is incomplete or broken.
+            if missing_after_repair or not is_renderable_card_template(
+                html, required_fields
+            ):
+                html = render_mock_card_template(
                     company=company,
                     brand=brand,
                     category=category,
-                    extra_instruction=(
-                        "Use the deterministic fallback design. "
-                        "Prioritize showing every required field."
-                    ),
-                    user_prompt=user_prompt,
-                    reference_image_url=None,
                     design_direction=design_direction,
                 )
 
@@ -484,6 +497,7 @@ The final HTML must contain every required placeholder exactly.
                 "variants": results,
                 "orientation": orientation,
                 "category": category.slug,
+                "generation_notice": generation_notice,
             },
             status=status.HTTP_200_OK,
         )
@@ -813,7 +827,7 @@ Do not reuse the existing composition.
                     reference_image_url=reference_image_url,
                 )
 
-                preview_html = render_preview_html(html, category)
+                preview_html = render_preview_html(html, category, company)
 
             except Exception:
                 import logging

@@ -8,6 +8,7 @@ from colorthief import ColorThief
 from io import BytesIO
 import json
 from django.conf import settings
+from .ai_provider import get_provider_config, generate_text
 
 COLOR_PATTERN = re.compile(
     r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b"
@@ -263,9 +264,8 @@ def extract_company_info_with_ai(
     meta_description: str,
     fallback_company_name: str,
 ) -> dict:
-    api_key = getattr(settings, "GEMINI_API_KEY", None)
-
-    if not api_key:
+    _, provider, api_key, _ = get_provider_config()
+    if not api_key and provider == "gemini":
         return {
             "company_name": fallback_company_name,
             "tagline": "",
@@ -275,13 +275,6 @@ def extract_company_info_with_ai(
             "phone": "",
             "email": "",
         }
-
-    from openai import OpenAI
-
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    )
 
     prompt = f"""Extract structured company information from this website content.
 Return ONLY valid JSON, no other text, matching this exact schema:
@@ -301,12 +294,7 @@ Page content:
 {page_text[:6000]}
 """
 
-    response = client.chat.completions.create(
-        model="gemini-3.6-flash",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    raw_text = response.choices[0].message.content.strip()
+    raw_text = generate_text(prompt).strip()
     raw_text = re.sub(r"^```json|```$", "", raw_text, flags=re.MULTILINE).strip()
 
     try:

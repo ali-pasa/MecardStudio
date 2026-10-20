@@ -84,6 +84,7 @@ class Company(ActiveAuditFields):
 
     # Company information
     company_name = models.CharField(max_length=255, null=True, blank=True)
+    payload = models.JSONField(default=dict, blank=True, null=True)
     tagline = models.CharField(max_length=255, null=True, blank=True)
     about = models.TextField(null=True, blank=True)
     industry = models.CharField(max_length=150, null=True, blank=True)
@@ -98,6 +99,10 @@ class Company(ActiveAuditFields):
     facebook_url = models.URLField(max_length=500, null=True, blank=True)
     youtube_url = models.URLField(max_length=500, null=True, blank=True)
     twitter_url = models.URLField(max_length=500, null=True, blank=True)
+
+    # Keep timestamps last in the companies table.
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "companies"

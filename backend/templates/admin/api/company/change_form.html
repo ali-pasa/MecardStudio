@@ -14,6 +14,7 @@
 
 {% block after_field_sets %}
   {{ block.super }}
+  <script src="{% static 'mecard/js/company_payload_repeater.js' %}"></script>
   {% if original %}
     {{ card_categories|json_script:"card-categories-data" }}
 

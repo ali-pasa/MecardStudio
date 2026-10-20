@@ -361,6 +361,9 @@ function CardGeneratorApp({
   const [error, setError] =
     useState('');
 
+  const [generationNotice, setGenerationNotice] =
+    useState('');
+
   const [selectedIds, setSelectedIds] =
     useState([]);
 
@@ -468,6 +471,7 @@ function CardGeneratorApp({
 
     setLoading(true);
     setError('');
+    setGenerationNotice('');
 
     setVariants([]);
     setSelectedIds([]);
@@ -570,6 +574,7 @@ function CardGeneratorApp({
       setVariants(
         normalizedVariants
       );
+      setGenerationNotice(data.generation_notice || '');
 
       setGeneratedAspectRatio(
         ratio
@@ -1340,6 +1345,23 @@ function CardGeneratorApp({
               }}
             >
               {error}
+            </div>
+          )}
+
+          {generationNotice && (
+            <div
+              role="status"
+              style={{
+                marginBottom: 18,
+                border: '1px solid #e8c979',
+                borderRadius: 8,
+                padding: '10px 12px',
+                color: '#73530b',
+                background: '#fff8df',
+                fontSize: 12,
+              }}
+            >
+              {generationNotice}
             </div>
           )}
 

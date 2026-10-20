@@ -97,6 +97,31 @@ class RoleAdmin(AuditAdminMixin, admin.ModelAdmin):
 
 @admin.register(Company)
 class CompanyAdmin(AuditAdminMixin, admin.ModelAdmin):
+    fields = (
+        "user",
+        "website_url",
+        "company_name",
+        "tagline",
+        "about",
+        "industry",
+        "address",
+        "phone",
+        "email",
+        "website",
+        "linkedin_url",
+        "instagram_url",
+        "facebook_url",
+        "youtube_url",
+        "twitter_url",
+        "is_active",
+        "meta_data",
+        "ip_address",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at",
+        "payload",
+    )
     list_display = ("company_name", "user", "industry", "is_active", "created_at")
     list_filter = ("industry", "is_active", "created_at")
     search_fields = ("company_name", "website_url", "email", "user__username")

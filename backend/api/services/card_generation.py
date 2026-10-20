@@ -6,6 +6,7 @@ import time
 from html import escape
 from bs4 import BeautifulSoup
 from django.conf import settings
+from .ai_provider import get_provider_config, generate_text
 
 
 # Maps required_fields (from CardCategory) to the placeholder token
@@ -38,6 +39,24 @@ FIELD_TOKEN_MAP = {
     "owner_name": "{{owner_name}}",
     "company_name": "{{company_name}}",
 }
+
+DEFAULT_CARD_FIELDS = ("photo", "qr_code", "company_name", "phone", "email", "job_title")
+PERSON_IDENTITY_FIELDS = (
+    "full_name", "member_name", "visitor_name", "patient_name",
+    "policy_holder_name", "owner_name", "employee_name",
+)
+
+
+def card_fields_for_category(category):
+    """Return category fields plus the standard identity-card fields."""
+    fields = list(category.required_fields or [])
+    if not any(field in PERSON_IDENTITY_FIELDS for field in fields):
+        fields.append("full_name")
+    return list(dict.fromkeys([*fields, *DEFAULT_CARD_FIELDS]))
+
+
+def card_placeholder(field):
+    return FIELD_TOKEN_MAP.get(field, f"{{{{{field}}}}}")
 
 PREVIEW_PHOTO_DATA_URI = "data:image/svg+xml;base64," + base64.b64encode(
     b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250">
@@ -157,7 +176,9 @@ def build_template_prompt(
     has_reference_image=False,
     design_direction=None,
 ):
-    required_fields = ", ".join(category.required_fields)
+    required_tokens = ", ".join(
+        card_placeholder(field) for field in card_fields_for_category(category)
+    )
     orientation_layout = (
         """PORTRAIT LAYOUT REQUIREMENTS:
 - Use a true vertical ID/pass composition, not a landscape layout squeezed into
@@ -213,7 +234,13 @@ For every field below, insert the EXACT placeholder token shown —
 these will be programmatically replaced with real data later.
 
 FIELDS TO PLACE IN THE DESIGN (as literal placeholder tokens):
-{required_fields}
+{required_tokens}
+These include the required category fields plus the standard ID-card fields:
+portrait, QR code, company name, phone, email, and designation/job title.
+Always include all of them, even when they are not listed as category-specific.
+Also include a relevant person-name token from this list when applicable:
+{{{{full_name}}}}, {{{{member_name}}}}, {{{{visitor_name}}}}, {{{{patient_name}}}},
+{{{{policy_holder_name}}}}, or {{{{owner_name}}}}.
 
 DESIGN QUALITY BAR — this must NOT look like a generic AI-generated card.
 Specifically:
@@ -234,6 +261,10 @@ Specifically:
   Do not replace the extracted brand palette with generic blue/orange.
 - The QR code area must look intentional: a clean white or contrasting
   tile with padding, not an afterthought
+- Include a small notification bell icon in the card header. Draw it with an
+  inline SVG or CSS shape; do not use emoji.
+- Place compact Share and Save controls together at the very end of the card
+  in a clear footer action row. They are visual card controls.
 - Assume this card will be viewed on a phone screen at typical badge size —
   keep text legible, no more than 2 accent colors + neutrals
 - Keep the composition visually balanced and use the available card area:
@@ -311,13 +342,36 @@ OUTPUT RULES:
     return base_context
 
 
-def _call_gemini_with_retry(client, **kwargs):
+def _call_provider_with_retry(prompt, image_data_uri=None):
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
-            return client.chat.completions.create(**kwargs)
+            return generate_text(prompt, image_data_uri=image_data_uri)
         except Exception as e:
-            is_503 = "503" in str(e) or "UNAVAILABLE" in str(e)
+            message = str(e)
+            is_rate_limited = getattr(e, "status_code", None) == 429 or "429" in message
+            if is_rate_limited and attempt < 2:
+                retry_after = None
+                response = getattr(e, "response", None)
+                headers = getattr(response, "headers", None) or {}
+                try:
+                    retry_after = float(headers.get("retry-after"))
+                except (TypeError, ValueError):
+                    match = re.search(
+                        r"retryDelay['\"]?\s*:\s*['\"]([\d.]+)s",
+                        message,
+                    )
+                    if match:
+                        retry_after = float(match.group(1))
+                retry_after = max(retry_after or 16, 1)
+                # Retry brief RPM throttles inline, but don't hold the web
+                # request for hours when a daily quota has been exhausted.
+                if retry_after <= 60:
+                    time.sleep(retry_after)
+                    continue
+                raise
+
+            is_503 = "503" in message or "UNAVAILABLE" in message
             if is_503 and attempt < max_attempts:
                 time.sleep(2 * attempt)  # 2s, then 4s backoff
                 continue
@@ -335,44 +389,34 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
     accent = getattr(brand, "accent_color", None) or "#f4b942"
     logo_url = getattr(brand, "logo_url", None)
 
+    card_fields = card_fields_for_category(category)
     identity_field = next(
-        (
-            field
-            for field in (
-                "full_name",
-                "member_name",
-                "visitor_name",
-                "patient_name",
-                "policy_holder_name",
-                "owner_name",
-                "employee_name",
-            )
-            if field in category.required_fields
-        ),
-        None,
+        (field for field in PERSON_IDENTITY_FIELDS if field in card_fields),
+        "full_name",
     )
-    identity_token = (
-        FIELD_TOKEN_MAP.get(identity_field, f"{{{{{identity_field}}}}}")
-        if identity_field
-        else "{{company_name}}"
-    )
+    identity_token = card_placeholder(identity_field)
     field_markup = "".join(
         f'<div class="detail"><span>{escape(field.replace("_", " ").title())}</span>'
-        f'<strong>{FIELD_TOKEN_MAP.get(field, "{{" + field + "}}")}</strong></div>'
-        for field in category.required_fields
-        if field not in ("photo", "qr_code", identity_field, "company_name")
+        f'<strong>{card_placeholder(field)}</strong></div>'
+        for field in card_fields
+        if field not in ("photo", "qr_code", identity_field)
     )
-    photo = (
-        '<div class="portrait"><img src="{{photo_url}}" alt="Portrait"></div>'
-        if "photo" in category.required_fields else ""
-    )
-    qr_code = (
-        '<div class="qr"><img src="{{qr_code_url}}" alt="QR code"></div>'
-        if "qr_code" in category.required_fields else ""
-    )
+    photo = '<div class="portrait"><img src="{{photo_url}}" alt="Portrait"></div>'
+    qr_code = '<div class="qr"><img src="{{qr_code_url}}" alt="QR code"></div>'
     logo_markup = (
         f'<img class="logo" src="{escape(logo_url, quote=True)}" alt="">'
-        if logo_url else f'<span class="logo-word">{escape(company.company_name or "Company")}</span>'
+        if logo_url else '<span class="logo-word">{{company_name}}</span>'
+    )
+    bell_icon = (
+        '<span class="notification-bell" aria-label="Notifications">'
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>'
+        '</span>'
+    )
+    card_actions = (
+        '<div class="card-actions">'
+        '<button type="button" aria-label="Share card"><span class="share-icon">↗</span>Share</button>'
+        '<button type="button" aria-label="Save card"><span class="save-icon">▣</span>Save</button>'
+        '</div>'
     )
     company_subtitle = escape(company.tagline or "Authorized identity")
     width = 480
@@ -402,6 +446,12 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
       .logo {{ display: block; max-width: 96px; max-height: 28px; object-fit: contain; }}
       .logo-word {{ color: var(--brand); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }}
       .category {{ color: var(--brand); font-size: 9px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }}
+      .header-actions {{ display: flex; align-items: center; gap: 10px; }}
+      .notification-bell {{ display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid currentColor; border-radius: 50%; color: var(--brand); }}
+      .notification-bell svg {{ width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }}
+      .card-actions {{ display: flex; align-self: flex-end; gap: 7px; margin-top: auto; padding-top: 10px; }}
+      .card-actions button {{ display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid rgba(127,145,160,.35); border-radius: 8px; color: var(--ink); background: rgba(255,255,255,.82); font: 700 9px Inter, sans-serif; }}
+      .card-actions span {{ font-size: 12px; line-height: 1; }}
       h1 {{ margin: 12px 0 4px; color: var(--ink); font-size: 26px; line-height: 1.05; letter-spacing: -.045em; }}
       .company {{ margin: 0 0 10px; color: #687887; font-size: 11px; }}
       .details {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; }}
@@ -452,6 +502,7 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
       }}
       .card.vertical .logo {{ max-width: 118px; max-height: 34px; }}
       .card.vertical .category {{ max-width: 190px; text-align: right; }}
+      .card.vertical .header-actions {{ margin-left: auto; }}
       .card.vertical .vertical-person {{
         display: flex; flex: 0 0 auto; align-items: center;
         flex-direction: column; padding: 18px 0 16px; text-align: center;
@@ -490,6 +541,9 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
         display: block; width: 28px; height: 3px; margin-bottom: 8px;
         border-radius: 3px; background: var(--accent); content: "";
       }}
+      .card.vertical .vertical-footer {{ flex-wrap: wrap; }}
+      .card.vertical .card-actions {{ margin-top: 0; padding-top: 0; }}
+      .card.vertical .card-actions button {{ color: #fff; border-color: rgba(255,255,255,.3); background: rgba(255,255,255,.1); }}
       .card.vertical .qr {{
         width: 66px; height: 66px; padding: 6px;
         border: 2px solid rgba(255,255,255,.8); border-radius: 10px;
@@ -542,7 +596,8 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
     if vertical:
         vertical_header = (
             f'<header class="vertical-topline">{logo_markup}'
-            f'<span class="category">{escape(category.name)}</span></header>'
+            f'<div class="header-actions"><span class="category">{escape(category.name)}</span>'
+            f'{bell_icon}</div></header>'
         )
         identity = (
             f'<h1>{identity_token}</h1>'
@@ -552,15 +607,16 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
             f'{vertical_header}<div class="vertical-person">{photo}{identity}</div>'
             f'<div class="details">{field_markup}</div>'
             f'<footer class="vertical-footer">'
-            f'<span class="vertical-footer-copy">{escape(category.name)}</span>{qr_code}'
+            f'<span class="vertical-footer-copy">{escape(category.name)}</span>{qr_code}{card_actions}'
             f'</footer>'
         )
     else:
         vertical_markup = (
             f'{photo}<section class="content">'
-            f'<div class="topline">{logo_markup}<span class="category">{escape(category.name)}</span></div>'
+            f'<div class="topline">{logo_markup}<div class="header-actions">'
+            f'<span class="category">{escape(category.name)}</span>{bell_icon}</div></div>'
             f'<h1>{identity_token}</h1><p class="company">{company_subtitle}</p>'
-            f'<div class="details">{field_markup}</div>'
+            f'<div class="details">{field_markup}</div>{card_actions}'
             f'</section>{qr_code}'
         )
     orientation_class = (
@@ -592,11 +648,7 @@ def generate_card_template(
       or creating a real card.
       """
 
-      api_key = getattr(
-          settings,
-          "GEMINI_API_KEY",
-          None,
-      )
+      _, provider, api_key, _ = get_provider_config()
 
       prompt = build_template_prompt(
           company,
@@ -773,7 +825,8 @@ def generate_card_template(
   18. Keep every placeholder EXACTLY as:
       {{field_name}}
 
-  19. Do not invent fields.
+  19. Do not invent any additional data fields beyond the required category
+      fields and the standard card fields listed above.
 
   20. Do not omit fields.
   """
@@ -783,70 +836,22 @@ def generate_card_template(
       # -------------------------------------------------------------
 
       if not api_key:
-          if reference_image_url:
+          if provider == "gemini" and not reference_image_url:
+              return render_mock_card_template(
+                  company,
+                  brand,
+                  category,
+                  design_direction=design_direction,
+              )
+          if reference_image_url and provider == "gemini":
               raise RuntimeError(
                   "Reference image generation requires GEMINI_API_KEY. "
                   "Configure the image generation service and try again."
               )
-          return render_mock_card_template(
-              company,
-              brand,
-              category,
-              design_direction=design_direction,
-          )
+          # Let generate_text raise an actionable missing-key error.
+          return generate_text(prompt, image_data_uri=reference_image_url)
 
-      # -------------------------------------------------------------
-      # GEMINI CLIENT
-      # -------------------------------------------------------------
-
-      from openai import OpenAI
-
-      client = OpenAI(
-          api_key=api_key,
-          base_url=(
-              "https://generativelanguage.googleapis.com/"
-              "v1beta/openai/"
-          ),
-      )
-
-      # -------------------------------------------------------------
-      # IMAGE + TEXT
-      # -------------------------------------------------------------
-
-      if reference_image_url:
-
-          content = [
-              {
-                  "type": "text",
-                  "text": prompt,
-              },
-              {
-                  "type": "image_url",
-                  "image_url": {
-                      "url": reference_image_url,
-                  },
-              },
-          ]
-
-      else:
-          content = prompt
-
-      # -------------------------------------------------------------
-      # CALL GEMINI
-      # -------------------------------------------------------------
-
-      response = _call_gemini_with_retry(
-          client,
-          model="gemini-3.6-flash",
-          messages=[
-              {
-                  "role": "user",
-                  "content": content,
-              }
-          ],
-      )
-
-      html = response.choices[0].message.content or ""
+      html = _call_provider_with_retry(prompt, image_data_uri=reference_image_url)
 
       html = html.strip()
 
@@ -918,14 +923,24 @@ def ensure_card_styling(template_html: str, category=None) -> str:
         size_override = soup.new_tag("style")
         size_override.string = f"""
           html, body {{
+            box-sizing: border-box !important;
             width: {width}px !important; height: {height}px !important;
             min-width: 0 !important; min-height: 0 !important;
             max-width: none !important; max-height: none !important;
-            margin: 0 !important; overflow: hidden !important;
+            margin: 0 !important; padding: 0 !important; overflow: hidden !important;
           }}
           body > *:not(script):not(style) {{
+            box-sizing: border-box !important;
             width: 100% !important; height: 100% !important;
             max-width: none !important; max-height: none !important;
+            margin: 0 !important;
+          }}
+          body .card, body main, body article {{
+            box-sizing: border-box !important;
+            width: 100% !important; height: 100% !important;
+            min-width: 0 !important; min-height: 0 !important;
+            max-width: none !important; max-height: none !important;
+            margin: 0 !important;
           }}
         """
         head.append(size_override)
@@ -984,18 +999,64 @@ def ensure_card_styling(template_html: str, category=None) -> str:
 
 def render_preview_html(template_html: str, category=None, company=None) -> str:
     """
-    Fills a template's {{placeholder}} tokens with realistic DEMO data,
-    purely for visual preview purposes. The stored template itself is
+    Fills a template's {{placeholder}} tokens with configured company payload
+    values, falling back to realistic demo data. The stored template itself is
     never modified — this is a display-only transformation.
     """
+    payload = getattr(company, "payload", None)
+    payload = payload if isinstance(payload, dict) else {}
+
     def replace_token(match):
         key = match.group(1).strip()
-        if key == "company_name" and company and company.company_name:
-            return company.company_name
-        return DEMO_DATA.get(key, key.replace("_", " ").title())
+        payload_key = key.strip("{}").strip()
+        if payload_key in payload and payload[payload_key] is not None:
+            value = payload[payload_key]
+        elif key == "company_name" and company and company.company_name:
+            value = company.company_name
+        else:
+            value = DEMO_DATA.get(key, key.replace("_", " ").title())
+        return escape(str(value))
 
     styled_html = ensure_card_styling(template_html, category)
     return re.sub(r"\{\{(\w+)\}\}", replace_token, styled_html)
+
+
+def is_renderable_card_template(template_html: str, required_fields) -> bool:
+    """Reject truncated or malformed model HTML before it reaches the iframe."""
+    if not isinstance(template_html, str) or not template_html.strip():
+        return False
+
+    soup = BeautifulSoup(template_html, "lxml")
+    body = soup.body
+    if body is None or not soup.find("style"):
+        return False
+
+    card_root = body.find(["main", "article", "section"])
+    if card_root is None:
+        card_root = body.find("div", class_=re.compile(r"\bcard\b", re.IGNORECASE))
+    if card_root is None:
+        return False
+
+    body_html = str(body)
+    if any(card_placeholder(field) not in body_html for field in required_fields):
+        return False
+
+    for node in body.find_all(["style", "script"]):
+        node.decompose()
+    visible_text = body.get_text(" ", strip=True)
+    visible_fields = [
+        field for field in required_fields if field not in ("photo", "qr_code")
+    ]
+    if any(card_placeholder(field) not in visible_text for field in visible_fields):
+        return False
+    if re.search(
+        r"\b(?:font-family|font-size|letter-spacing|border-radius|box-shadow|"
+        r"background(?:-color)?|grid-template-columns)\s*:",
+        visible_text,
+        re.IGNORECASE,
+    ):
+        return False
+    return True
 
 
 def render_card_from_template(template_html: str, data: dict) -> str:

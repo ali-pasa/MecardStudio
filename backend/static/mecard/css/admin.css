@@ -782,3 +782,57 @@ body.change-list #content > .admin-page-heading > .object-tools a {
   margin-top: 0 !important;
 }
 
+.payload-repeater {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.form-row[hidden] {
+  display: none !important;
+}
+
+.payload-repeater > p:first-child {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.payload-repeater table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.payload-repeater th:nth-child(1),
+.payload-repeater td:nth-child(1),
+.payload-repeater th:nth-child(2),
+.payload-repeater td:nth-child(2) {
+  width: 42%;
+}
+
+.payload-repeater th:last-child,
+.payload-repeater td:last-child {
+  width: 16%;
+}
+
+.payload-repeater th,
+.payload-repeater td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.payload-repeater input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.payload-repeater-error {
+  color: #9a3030 !important;
+}
+
