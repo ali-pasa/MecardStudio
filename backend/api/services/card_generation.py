@@ -47,9 +47,15 @@ PERSON_IDENTITY_FIELDS = (
 )
 
 
-def card_fields_for_category(category):
-    """Return category fields plus the standard identity-card fields."""
+def card_fields_for_category(category, company=None):
+    """Return category, custom company payload, and standard card fields."""
     fields = list(category.required_fields or [])
+    payload = getattr(company, "payload", None)
+    if isinstance(payload, dict):
+        for payload_key, value in payload.items():
+            key = str(payload_key).strip().strip("{}").strip()
+            if re.fullmatch(r"\w+", key) and value is not None and str(value).strip():
+                fields.append(key)
     if not any(field in PERSON_IDENTITY_FIELDS for field in fields):
         fields.append("full_name")
     return list(dict.fromkeys([*fields, *DEFAULT_CARD_FIELDS]))
@@ -177,7 +183,7 @@ def build_template_prompt(
     design_direction=None,
 ):
     required_tokens = ", ".join(
-        card_placeholder(field) for field in card_fields_for_category(category)
+        card_placeholder(field) for field in card_fields_for_category(category, company)
     )
     orientation_layout = (
         """PORTRAIT LAYOUT REQUIREMENTS:
@@ -261,10 +267,8 @@ Specifically:
   Do not replace the extracted brand palette with generic blue/orange.
 - The QR code area must look intentional: a clean white or contrasting
   tile with padding, not an afterthought
-- Include a small notification bell icon in the card header. Draw it with an
-  inline SVG or CSS shape; do not use emoji.
-- Place compact Share and Save controls together at the very end of the card
-  in a clear footer action row. They are visual card controls.
+- Do not add app controls or unrelated interface elements. This is the card
+  design itself, not an application screen.
 - Assume this card will be viewed on a phone screen at typical badge size —
   keep text legible, no more than 2 accent colors + neutrals
 - Keep the composition visually balanced and use the available card area:
@@ -349,28 +353,8 @@ def _call_provider_with_retry(prompt, image_data_uri=None):
             return generate_text(prompt, image_data_uri=image_data_uri)
         except Exception as e:
             message = str(e)
-            is_rate_limited = getattr(e, "status_code", None) == 429 or "429" in message
-            if is_rate_limited and attempt < 2:
-                retry_after = None
-                response = getattr(e, "response", None)
-                headers = getattr(response, "headers", None) or {}
-                try:
-                    retry_after = float(headers.get("retry-after"))
-                except (TypeError, ValueError):
-                    match = re.search(
-                        r"retryDelay['\"]?\s*:\s*['\"]([\d.]+)s",
-                        message,
-                    )
-                    if match:
-                        retry_after = float(match.group(1))
-                retry_after = max(retry_after or 16, 1)
-                # Retry brief RPM throttles inline, but don't hold the web
-                # request for hours when a daily quota has been exhausted.
-                if retry_after <= 60:
-                    time.sleep(retry_after)
-                    continue
-                raise
-
+            # Treat 429 as exhausted quota for this generation. Retrying every
+            # variant immediately multiplies requests and cannot fix RPD/TPM.
             is_503 = "503" in message or "UNAVAILABLE" in message
             if is_503 and attempt < max_attempts:
                 time.sleep(2 * attempt)  # 2s, then 4s backoff
@@ -389,7 +373,7 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
     accent = getattr(brand, "accent_color", None) or "#f4b942"
     logo_url = getattr(brand, "logo_url", None)
 
-    card_fields = card_fields_for_category(category)
+    card_fields = card_fields_for_category(category, company)
     identity_field = next(
         (field for field in PERSON_IDENTITY_FIELDS if field in card_fields),
         "full_name",
@@ -825,8 +809,7 @@ def generate_card_template(
   18. Keep every placeholder EXACTLY as:
       {{field_name}}
 
-  19. Do not invent any additional data fields beyond the required category
-      fields and the standard card fields listed above.
+  19. Do not invent any data fields beyond the required tokens listed above.
 
   20. Do not omit fields.
   """

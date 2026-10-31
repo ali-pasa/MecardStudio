@@ -314,8 +314,10 @@ def run_full_extraction(website_url: str) -> dict:
     soup = fetch_page(website_url)
 
     meta_desc_tag = soup.find("meta", attrs={"name": "description"})
-    meta_description = meta_desc_tag["content"] if meta_desc_tag else ""
+    meta_description = meta_desc_tag.get("content", "").strip() if meta_desc_tag else ""
     page_text = soup.get_text(separator=" ", strip=True)
+    if not page_text and not meta_description:
+        raise ValueError("No company information could be fetched from that URL.")
     fallback_company_name = extract_company_name(soup, website_url)
 
     logo_url = extract_logo_url(soup, website_url)

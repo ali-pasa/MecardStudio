@@ -373,6 +373,9 @@ function CardGeneratorApp({
   const fileInputRef =
     useRef(null);
 
+  const generationInFlightRef =
+    useRef(false);
+
 
   /* ============================================================
      Loading message rotation
@@ -465,10 +468,11 @@ function CardGeneratorApp({
      ============================================================ */
 
   const generate = useCallback(async () => {
-    if (!categorySlug || loading) {
+    if (!categorySlug || loading || generationInFlightRef.current) {
       return;
     }
 
+    generationInFlightRef.current = true;
     setLoading(true);
     setError('');
     setGenerationNotice('');
@@ -585,6 +589,7 @@ function CardGeneratorApp({
         'Card generation failed.'
       );
     } finally {
+      generationInFlightRef.current = false;
       setLoading(false);
     }
   }, [
