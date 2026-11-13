@@ -65,6 +65,15 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.1").strip()
 CODEX_MODEL = os.getenv("CODEX_MODEL", "gpt-5.1-codex").strip()
 AI_MAX_TOKENS = int(os.getenv("AI_MAX_TOKENS", "8192"))
+# URL extraction: small output budget + low reasoning effort keeps it fast/cheap.
+AI_EXTRACTION_MAX_TOKENS = int(os.getenv("AI_EXTRACTION_MAX_TOKENS", "600"))
+AI_EXTRACTION_REASONING_EFFORT = os.getenv("AI_EXTRACTION_REASONING_EFFORT", "low").strip()
+# Card generation: variants are batched into one request (prompt + reference
+# image sent once). Effort "low" trims hidden thinking tokens on Gemini/OpenAI;
+# set to "" to use the model default, or "medium" for more deliberate designs.
+AI_CARD_VARIANTS_PER_CALL = max(1, int(os.getenv("AI_CARD_VARIANTS_PER_CALL", "3")))
+AI_CARD_MAX_TOKENS_PER_VARIANT = int(os.getenv("AI_CARD_MAX_TOKENS_PER_VARIANT", "4000"))
+AI_CARD_REASONING_EFFORT = os.getenv("AI_CARD_REASONING_EFFORT", "low").strip()
 
 INSTALLED_APPS = [
     'django.contrib.admin',

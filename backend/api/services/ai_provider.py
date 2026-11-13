@@ -54,7 +54,10 @@ def provider_has_api_key():
     return bool(get_provider_config()[2])
 
 
-def generate_text(prompt, image_data_uri=None):
+def generate_text(prompt, image_data_uri=None, max_tokens=None, purpose=None):
+    """Generate text. `max_tokens` caps output (Claude). `purpose` ("extraction"
+    or "card") applies that task's reasoning-effort setting on OpenAI/Gemini,
+    which cuts hidden thinking tokens, latency and quota use."""
     configured_name, provider, api_key, model = get_provider_config()
     if not api_key:
         key_names = {
@@ -67,15 +70,15 @@ def generate_text(prompt, image_data_uri=None):
         )
 
     if provider == "claude":
-        return _generate_with_claude(api_key, model, prompt, image_data_uri)
+        return _generate_with_claude(api_key, model, prompt, image_data_uri, max_tokens)
 
     return _generate_with_openai_compatible(
-        provider, api_key, model, prompt, image_data_uri
+        provider, api_key, model, prompt, image_data_uri, purpose
     )
 
 
-def _generate_with_openai_compatible(provider, api_key, model, prompt, image_data_uri):
-    from openai import OpenAI
+def _generate_with_openai_compatible(provider, api_key, model, prompt, image_data_uri, purpose=None):
+    from openai import OpenAI, BadRequestError
 
     client_options = {"api_key": api_key}
     if provider == "gemini":
@@ -91,14 +94,24 @@ def _generate_with_openai_compatible(provider, api_key, model, prompt, image_dat
             {"type": "image_url", "image_url": {"url": image_data_uri}},
         ]
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": content}],
-    )
+    request = {"model": model, "messages": [{"role": "user", "content": content}]}
+    effort_setting = {
+        "extraction": "AI_EXTRACTION_REASONING_EFFORT",
+        "card": "AI_CARD_REASONING_EFFORT",
+    }.get(purpose)
+    effort = getattr(settings, effort_setting, "").strip() if effort_setting else ""
+    if effort:
+        try:
+            response = client.chat.completions.create(**request, reasoning_effort=effort)
+            return response.choices[0].message.content or ""
+        except BadRequestError:
+            pass  # model does not support reasoning_effort; retry plainly
+
+    response = client.chat.completions.create(**request)
     return response.choices[0].message.content or ""
 
 
-def _generate_with_claude(api_key, model, prompt, image_data_uri):
+def _generate_with_claude(api_key, model, prompt, image_data_uri, max_tokens=None):
     from anthropic import Anthropic
 
     content = [{"type": "text", "text": prompt}]
@@ -127,7 +140,7 @@ def _generate_with_claude(api_key, model, prompt, image_data_uri):
     client = Anthropic(api_key=api_key)
     response = client.messages.create(
         model=model,
-        max_tokens=getattr(settings, "AI_MAX_TOKENS", 8192),
+        max_tokens=max_tokens or getattr(settings, "AI_MAX_TOKENS", 8192),
         messages=[{"role": "user", "content": content}],
     )
     return "\n".join(

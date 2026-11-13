@@ -2,6 +2,7 @@ import re
 import json
 import base64
 import copy
+import random
 import time
 from html import escape
 from bs4 import BeautifulSoup
@@ -174,6 +175,93 @@ def category_for_card_orientation(category, orientation=None):
     return oriented_category
 
 
+FIELD_LABELS = {
+    "photo": "Photo", "qr_code": "QR code", "id_number": "ID No.",
+    "valid_until": "Valid until", "job_title": "Designation", "membership_id": "Member ID",
+    "patient_id": "Patient ID", "blood_group": "Blood group", "policy_number": "Policy No.",
+    "provider_name": "Provider", "vehicle_number": "Vehicle No.", "company_name": "Issuer",
+}
+
+# Only the hints for fields a category actually has are sent (no wasted tokens).
+FIELD_HINTS = {
+    "blood_group": "blood group as a high-contrast badge",
+    "emergency_contact": "emergency contact clearly labelled and high contrast",
+    "tier": "tier as a badge/ribbon",
+    "valid_until": "validity as a small line near the footer",
+    "vehicle_number": "vehicle number as a large licence-plate style block",
+    "medical_notes": "medical notes may wrap to 2 lines in smaller text",
+    "visit_date": "visit date and host grouped together",
+    "id_number": "ID numbers in tabular/monospace figures",
+    "membership_id": "member ID in tabular/monospace figures",
+    "policy_number": "policy number in tabular/monospace figures",
+}
+
+# Design directions that suit each category best (by slug keyword).
+CATEGORY_DIRECTION_PREFERENCES = (
+    ("membership", ("membership", "dark", "asymmetric")),
+    ("insurance", ("minimal", "membership", "tech")),
+    ("visitor", ("tech", "color-block", "minimal")),
+    ("health", ("minimal", "tech", "editorial")),
+    ("emergency", ("color-block", "minimal", "tech")),
+    ("parking", ("color-block", "tech", "dark")),
+    ("business", ("minimal", "editorial", "dark")),
+    ("id", ("portrait", "editorial", "tech")),
+)
+
+REFERENCE_VARIATIONS = (
+    "Faithful recreation of the reference card's layout and style.",
+    "Same visual language as the reference, but an alternate arrangement of photo, details and QR.",
+    "Same palette and typography as the reference, with a bolder header and footer treatment.",
+)
+
+CARD_SIZE_STYLE_ATTR = "data-card-size"
+
+
+def _card_dimensions(category):
+    width, height = 480, 300
+    ratio = getattr(category, "default_aspect_ratio", None)
+    if ratio:
+        try:
+            ratio_width, ratio_height = (float(part) for part in ratio.split(":"))
+            if ratio_width > 0 and ratio_height > 0:
+                height = round(width * ratio_height / ratio_width)
+        except (ValueError, TypeError):
+            pass
+    return width, height
+
+
+def _field_label(field):
+    return FIELD_LABELS.get(field, field.replace("_", " ").capitalize())
+
+
+def pick_design_directions(count, category=None, rng=None):
+    """Distinct directions, category-appropriate ones first, shuffled per request."""
+    rng = rng or random.Random()
+    slug = (getattr(category, "slug", "") or getattr(category, "name", "") or "").lower()
+    preferred = next((keys for word, keys in CATEGORY_DIRECTION_PREFERENCES if word in slug), ())
+    by_key = {d["key"]: d for d in CARD_DESIGN_DIRECTIONS}
+    first = [by_key[k] for k in preferred if k in by_key]
+    rest = [d for d in CARD_DESIGN_DIRECTIONS if d["key"] not in preferred]
+    rng.shuffle(first)
+    rng.shuffle(rest)
+    ordered = first + rest
+    return [ordered[i % len(ordered)] for i in range(count)]
+
+
+def _brand_extras(company, brand):
+    """Optional brand facts from URL extraction; omitted lines cost no tokens."""
+    parts = []
+    if brand and getattr(brand, "font_family", None):
+        parts.append(f"font {brand.font_family} (Google Fonts if available)")
+    if brand and getattr(brand, "brand_style", None):
+        parts.append(f"tone {brand.brand_style}")
+    if getattr(company, "industry", None):
+        parts.append(f"industry {company.industry}")
+    if getattr(company, "tagline", None):
+        parts.append(f'optional small tagline "{company.tagline}"')
+    return "; ".join(parts)
+
+
 def build_template_prompt(
     company,
     brand,
@@ -181,185 +269,149 @@ def build_template_prompt(
     user_prompt=None,
     has_reference_image=False,
     design_direction=None,
+    concepts=None,
 ):
-    required_tokens = ", ".join(
-        card_placeholder(field) for field in card_fields_for_category(category, company)
+    """Compact shared design brief. `concepts` (list of str) asks for several
+    cards in one response so the brief and any reference image are sent once."""
+    fields = card_fields_for_category(category, company)
+    width, height = _card_dimensions(category)
+    vertical = height > width
+    identity = next((f for f in fields if f in PERSON_IDENTITY_FIELDS), "full_name")
+
+    field_lines = []
+    for field in fields:
+        token = card_placeholder(field)
+        if field == "photo":
+            field_lines.append(f'<img src="{token}"> compact portrait, object-fit:cover')
+        elif field == "qr_code":
+            field_lines.append(f'<img src="{token}"> QR on a white tile with padding')
+        elif field == identity:
+            field_lines.append(f"{token} cardholder name: the largest text")
+        else:
+            field_lines.append(f"{token} label \"{_field_label(field)}\"")
+    hints = [FIELD_HINTS[f] for f in fields if f in FIELD_HINTS]
+
+    logo = (
+        f"logo <img> {brand.logo_url}" if brand and getattr(brand, "logo_url", None)
+        else "no logo: use a text wordmark of {{company_name}}"
     )
-    orientation_layout = (
-        """PORTRAIT LAYOUT REQUIREMENTS:
-- Use a true vertical ID/pass composition, not a landscape layout squeezed into
-  a tall canvas.
-- Reserve about 8% of the height for the brand/category header, 32% for a
-  compact portrait and cardholder identity, 38% for a clearly grouped details
-  panel, and the remaining height for a designed footer with the QR code.
-- Place the cardholder name directly under or beside the portrait and make it
-  the largest text. Do not use the company name as the main heading.
-- Give the details panel a subtle contrasting surface and use a two-column
-  grid when there are at least four detail fields.
-- Anchor the footer to the bottom edge with a brand-color band. Keep all
-  content inside the card bounds.
-"""
-        if category.default_aspect_ratio == CARD_ORIENTATION_ASPECT_RATIOS["vertical"]
-        else """LANDSCAPE LAYOUT REQUIREMENTS:
-- Use a true horizontal card composition with a compact portrait on one side
-  and the cardholder identity/details grouped in the remaining space.
-- Use the full width efficiently; keep the company as a small brand mark and
-  the cardholder name as the primary heading.
-"""
+    extras = _brand_extras(company, brand)
+    layout = (
+        "Vertical badge: header ~10%, portrait + name ~32%, two-column details ~38%, "
+        "footer band with QR at the bottom."
+        if vertical else
+        "Horizontal card: portrait on one side, name and details grouped beside it, QR tile placed deliberately."
     )
 
-    base_context = f"""You are a senior product designer at a top-tier design studio
-(think: the visual quality of Stripe, Linear, or Apple's internal badge systems).
-Generate a complete, self-contained HTML file with a polished, fully styled
-card design (inline <style> only, no external CSS/JS except Google Fonts) for
-a reusable "{category.name}" TEMPLATE.
-
-CRITICAL — OUTPUT ONLY THE CARD ITSELF, NOT A FULL PAGE:
-- The <body> must contain ONLY the card element, with NOTHING else around it.
-- Do NOT center the card on a full-viewport page. Do NOT set body min-height:
-  100vh, do NOT add a background color/gradient behind the card that fills
-  the whole page, and do NOT add any outer page padding.
-- body margin must be 0. The card element's own width/height (matching the
-  aspect ratio below) should define the ENTIRE visible page size — as if
-  this HTML file IS the card, not a webpage that happens to display a card.
-- Always include a non-empty <style> block with the complete visual design.
-  Do not return plain headings, paragraphs, or unstyled content; every field
-  must be placed inside the designed card layout.
-- Use one clearly defined card root element with explicit width and height,
-  box-sizing: border-box, background, border-radius, and overflow: hidden.
-  Scope visual styles to that card root and its children; do not style a full
-  page or rely on browser defaults.
-- This card will be rendered inside a small embedded iframe/thumbnail, so
-  any extra page chrome (dark background, centering, margins) will show up
-  as ugly empty space or force scrolling. Keep the output exactly the size
-  of the card and nothing more.
-
-IMPORTANT — THIS IS A TEMPLATE, NOT A FILLED-IN CARD:
-Do not invent sample data (no fake names, fake ID numbers, fake dates).
-For every field below, insert the EXACT placeholder token shown —
-these will be programmatically replaced with real data later.
-
-FIELDS TO PLACE IN THE DESIGN (as literal placeholder tokens):
-{required_tokens}
-These include the required category fields plus the standard ID-card fields:
-portrait, QR code, company name, phone, email, and designation/job title.
-Always include all of them, even when they are not listed as category-specific.
-Also include a relevant person-name token from this list when applicable:
-{{{{full_name}}}}, {{{{member_name}}}}, {{{{visitor_name}}}}, {{{{patient_name}}}},
-{{{{policy_holder_name}}}}, or {{{{owner_name}}}}.
-
-DESIGN QUALITY BAR — this must NOT look like a generic AI-generated card.
-Specifically:
-- Use a deliberate visual hierarchy: one clear focal point (usually the
-  name/photo), supporting details clearly secondary in size/weight/color
-- Use real spacing discipline — consistent padding/margins on an 8px grid,
-  never cramped or randomly uneven
-- Use subtle depth: soft shadows, thin borders, or a faint gradient — not
-  flat single-color blocks, but also not overdone/gaudy
-- Typography: import a real Google Font via <link> (e.g. Inter, Manrope,
-  Space Grotesk, or similar) rather than relying on default system fonts;
-  establish a clear type scale (name is largest, labels are smallest/muted)
-- Respect the brand colors as ACCENTS and structure, not by painting the
-  whole card in one color — use a neutral base (white, near-black, or a
-  soft tint of the brand color) with the brand color used deliberately for
-  emphasis (a stripe, a badge, an icon background, a border)
-- Use the supplied primary, secondary, and accent colors as exact CSS values.
-  Do not replace the extracted brand palette with generic blue/orange.
-- The QR code area must look intentional: a clean white or contrasting
-  tile with padding, not an afterthought
-- Do not add app controls or unrelated interface elements. This is the card
-  design itself, not an application screen.
-- Assume this card will be viewed on a phone screen at typical badge size —
-  keep text legible, no more than 2 accent colors + neutrals
-- Keep the composition visually balanced and use the available card area:
-  all required fields must be visible without scrolling, clipped content, or
-  large empty regions. Never push the name/details to the bottom with
-  margin-top:auto or justify-content:space-between.
-- Keep a portrait compact (about 20–28% of the card width and no more than
-  32% of its height). Use object-fit:cover and a fixed portrait frame; do not
-  stretch an image to fill the entire card.
-- For a vertical card, use a compact top-to-bottom hierarchy: brand/header,
-  portrait and name, then a tight two-column details grid and QR tile. Keep
-  these elements grouped with consistent spacing.
-- For a horizontal card, use a compact side-by-side composition with the
-  portrait at one side and name/details grouped in the remaining space.
-- Do not leave a large empty photo or color panel; if a portrait is present,
-  its frame must stay compact and the required information must remain the
-  primary focus.
-- The cardholder is the hero, not the company: use the most relevant person
-  placeholder as the large name (for example {{full_name}}, {{member_name}},
-  {{visitor_name}}, or {{patient_name}}). Use {{company_name}} only for the
-  logo/issuer line; never repeat the company as the cardholder's name.
-- Fill the card canvas with a deliberate composition from top to bottom.
-  Required content should occupy the central area and a designed footer or
-  lower information band should finish the card. Do not leave the lower half
-  empty after placing everything at the top.
-
-CARD DIMENSIONS:
-- Aspect ratio: {category.default_aspect_ratio or "1.6:1"}
-- Set the card element's actual pixel width/height to match this ratio
-  (e.g. 480px x 300px for 1.6:1 or 480px x 768px for 1:1.6) — this defines
-  the whole page's size
-- Leave a clearly styled area for the QR code placeholder token
-- Layout should look like a real, physical ID/pass/badge — reference how
-  actual corporate badges, event passes, or premium membership cards look
-{orientation_layout}
-
-DESIGN CONCEPT FOR THIS GENERATION:
-{design_direction or "Choose a distinctive, high-quality composition; avoid a generic centered list."}
-
-FIXED BRAND DATA (use these as real, actual values — NOT placeholders):
-- Company name: {company.company_name or "Company Name"}
-- Logo URL: {brand.logo_url if brand and brand.logo_url else "none — use a clean text logo instead"}
-- Primary color: {brand.primary_color if brand and brand.primary_color else "#1f6f8b"}
-- Secondary color: {brand.secondary_color if brand and brand.secondary_color else "#172b3b"}
-- Accent color: {brand.accent_color if brand and brand.accent_color else "#f4b942"}
-"""
+    lines = [
+        f'Design a reusable "{category.name}" card TEMPLATE as self-contained HTML.',
+        "",
+        f'BRAND (exact values): company "{company.company_name or "Company Name"}"; {logo}; '
+        f"primary {getattr(brand, 'primary_color', None) or '#1f6f8b'}, "
+        f"secondary {getattr(brand, 'secondary_color', None) or '#172b3b'}, "
+        f"accent {getattr(brand, 'accent_color', None) or '#f4b942'}"
+        + (f"; {extras}" if extras else "") + ".",
+        "",
+        "FIELDS: include every token exactly as written, as visible text (labels short):",
+        *(f"- {line}" for line in field_lines),
+    ]
+    if hints:
+        lines.append("Field styling: " + "; ".join(hints) + ".")
+    lines += [
+        "Never invent sample data or extra fields. {{company_name}} is the issuer mark, not the hero.",
+        "",
+        f"CANVAS: one root <main class=\"card\"> exactly {width}x{height}px; body margin 0 with "
+        "nothing outside the card; overflow hidden; box-sizing border-box. " + layout,
+        "",
+        "QUALITY: looks like a real printed badge from a top design studio; clear hierarchy; "
+        "8px spacing grid; neutral base with brand colours as accents (stripe, band, badge); "
+        "fill the canvas evenly with no large empty areas and no clipped text; text >= 9px; "
+        "no buttons, icons for app actions, or JavaScript.",
+    ]
 
     if has_reference_image:
-        base_context += """
-A REFERENCE IMAGE is attached. Treat its card design as the primary design
-specification, ahead of generic style guidance and preset design directions.
-Match the card's composition, relative sizing and placement, typography,
-shapes, borders, spacing, and color palette closely. Keep the supplied
-company identity and required data, but do not replace the reference palette
-with the brand defaults. If the image shows multiple card designs, use only
-the requested design for this variant (specified below); do not combine them.
-Recreate the card itself edge-to-edge. Do not reproduce surrounding page
-chrome, phone/device frames, screenshot margins, or unrelated text. Keep all
-required fields readable and fit within the requested card dimensions.
-"""
-
+        lines += [
+            "",
+            "REFERENCE IMAGE attached: it is the primary design spec. Match its composition, "
+            "typography, shapes, spacing and palette; replace its sample data with the tokens; "
+            "ignore screenshot/device chrome.",
+        ]
     if user_prompt:
-        base_context += f"\n\nUSER'S SPECIFIC DESIGN REQUEST: {user_prompt}\nIncorporate this into the design, prioritizing it alongside the reference image guidance if both are present.\n"
+        lines += ["", f"USER REQUEST (highest priority for style): {user_prompt}"]
 
-    base_context += """
-OUTPUT RULES:
-- Return ONLY the HTML code — no explanation, no markdown code fences
-- The document must include <html>, <head>, a non-empty inline <style> block,
-  and <body> containing the designed card
-- Include a Google Fonts <link> tag if using a non-system font
-- Keep every {{placeholder}} token EXACTLY as given, character for character
-- The result should look like it came from a real design team, not a template generator
-- Remember: body contains ONLY the card, sized to the card's own dimensions
-"""
-    return base_context
+    if concepts and len(concepts) > 1:
+        lines += [
+            "",
+            f"Create {len(concepts)} cards. Each must differ in LAYOUT (photo/QR position, "
+            "header/footer structure, grouping), not just colour:",
+            *(f"{i}. {concept}" for i, concept in enumerate(concepts, 1)),
+            "",
+            f"OUTPUT: {len(concepts)} complete HTML documents, each preceded by its marker line "
+            "<!--CARD n--> (n = 1..). Compact CSS in one <style> per card: no comments, short "
+            "class names, no unused rules. A Google Fonts <link> is allowed. No markdown, no prose.",
+        ]
+    else:
+        concept = (concepts or [design_direction])[0] if (concepts or design_direction) else None
+        if concept:
+            lines += ["", f"CONCEPT: {concept}"]
+        lines += [
+            "",
+            "OUTPUT: one complete HTML document. Compact CSS in one <style>: no comments, short "
+            "class names, no unused rules. A Google Fonts <link> is allowed. No markdown, no prose.",
+        ]
+    return "\n".join(lines)
 
 
-def _call_provider_with_retry(prompt, image_data_uri=None):
+def _call_provider_with_retry(prompt, image_data_uri=None, max_tokens=None):
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
-            return generate_text(prompt, image_data_uri=image_data_uri)
+            return generate_text(
+                prompt, image_data_uri=image_data_uri, max_tokens=max_tokens, purpose="card"
+            )
         except Exception as e:
             message = str(e)
             # Treat 429 as exhausted quota for this generation. Retrying every
             # variant immediately multiplies requests and cannot fix RPD/TPM.
-            is_503 = "503" in message or "UNAVAILABLE" in message
+            is_503 = "503" in message or "UNAVAILABLE" in message or "overloaded" in message.lower()
             if is_503 and attempt < max_attempts:
                 time.sleep(2 * attempt)  # 2s, then 4s backoff
                 continue
             raise
+
+
+def _strip_fences(text):
+    text = re.sub(r"```(?:html)?", "", text or "", flags=re.IGNORECASE)
+    return text.strip()
+
+
+def split_generated_cards(text, count):
+    """Split a multi-card response into `count` HTML strings (None where missing)."""
+    text = _strip_fences(text)
+    parts = [
+        part.strip() for part in re.split(r"<!--\s*CARD\s*\d*\s*-->", text, flags=re.IGNORECASE)
+        if re.search(r"<(?:html|body|main|style)\b", part, re.IGNORECASE)
+    ]
+    if len(parts) < min(count, 2):
+        documents = re.findall(
+            r"(?:<!doctype html>\s*)?<html\b.*?(?:</html>|$)", text, flags=re.IGNORECASE | re.DOTALL
+        )
+        if len(documents) > len(parts):
+            parts = [d.strip() for d in documents]
+    return (parts + [None] * count)[:count]
+
+
+def strip_card_size_overrides(template_html):
+    """Remove styles injected by ensure_card_styling (saves tokens on edits)."""
+    soup = BeautifulSoup(template_html, "lxml")
+    for style in soup.find_all("style", attrs={CARD_SIZE_STYLE_ATTR: True}):
+        style.decompose()
+    return str(soup)
+
+
+def _card_token_budget(count):
+    per_card = getattr(settings, "AI_CARD_MAX_TOKENS_PER_VARIANT", 4000)
+    return min(per_card * max(count, 1), 16000)
 
 
 def render_mock_card_template(company, brand, category, design_direction=None) -> str:
@@ -614,6 +666,65 @@ def render_mock_card_template(company, brand, category, design_direction=None) -
       </main></body></html>"""
 
 
+def _mock_allowed(provider, api_key, reference_image_url):
+    return not api_key and provider == "gemini" and not reference_image_url
+
+
+def _raise_for_missing_key(provider, api_key, reference_image_url):
+    if api_key:
+        return
+    if reference_image_url and provider == "gemini":
+        raise RuntimeError(
+            "Reference image generation requires GEMINI_API_KEY. "
+            "Configure the image generation service and try again."
+        )
+    # Let generate_text raise an actionable missing-key error.
+    generate_text("")
+
+
+def generate_card_variants(
+    company,
+    brand,
+    category,
+    directions,
+    user_prompt=None,
+    reference_image_url=None,
+):
+    """Generate several templates in ONE AI request.
+
+    The design brief and any reference image are sent once for the whole batch
+    instead of once per variant. Returns one HTML string (or None when the
+    model returned nothing usable for that slot) per direction.
+    """
+    _, provider, api_key, _ = get_provider_config()
+    if _mock_allowed(provider, api_key, reference_image_url):
+        return [
+            render_mock_card_template(company, brand, category, design_direction=d["key"])
+            for d in directions
+        ]
+    _raise_for_missing_key(provider, api_key, reference_image_url)
+
+    if reference_image_url:
+        concepts = [REFERENCE_VARIATIONS[i % len(REFERENCE_VARIATIONS)] for i in range(len(directions))]
+    else:
+        concepts = [f"{d['label']}: {d['instruction']}" for d in directions]
+
+    prompt = build_template_prompt(
+        company,
+        brand,
+        category,
+        user_prompt=user_prompt,
+        has_reference_image=bool(reference_image_url),
+        concepts=concepts,
+    )
+    raw = _call_provider_with_retry(
+        prompt, image_data_uri=reference_image_url, max_tokens=_card_token_budget(len(directions))
+    )
+    if len(directions) == 1:
+        return [_strip_fences(raw) or None]
+    return split_generated_cards(raw, len(directions))
+
+
 def generate_card_template(
     company,
     brand,
@@ -624,243 +735,102 @@ def generate_card_template(
     reference_image_url=None,
     design_direction=None,
 ):
-      """
-      Generate one reusable card template.
-
-      The generated HTML contains {{placeholder}} tokens.
-      Those tokens are replaced only when rendering the preview
-      or creating a real card.
-      """
-
-      _, provider, api_key, _ = get_provider_config()
-
-      prompt = build_template_prompt(
-          company,
-          brand,
-          category,
-          user_prompt=user_prompt,
-          has_reference_image=bool(reference_image_url),
-          design_direction=design_direction,
-      )
-
-      # -------------------------------------------------------------
-      # FORCE DESIGN DIFFERENTIATION
-      # -------------------------------------------------------------
-
-      if design_direction:
-          design = next(
-              (
-                  item
-                  for item in CARD_DESIGN_DIRECTIONS
-                  if item["key"] == design_direction
-              ),
-              None,
-          )
-
-          if design:
-              prompt += f"""
-
-  ========================================================
-  MANDATORY DESIGN DIRECTION
-  ========================================================
-
-  Design concept:
-  {design["label"]}
-
-  Required composition:
-  {design["instruction"]}
-
-  This is NOT optional.
-
-  You must create a genuinely different composition
-  based on this direction.
-
-  Do not merely change:
-  - colors
-  - font sizes
-  - border radius
-  - shadows
-
-  You MUST change:
-  - element placement
-  - information grouping
-  - photo placement
-  - QR placement
-  - header structure
-  - footer structure
-  - visual hierarchy
-  - whitespace/composition
-
-  The resulting card must be visibly different from
-  another card generated using another design direction.
-  """
-
-      # -------------------------------------------------------------
-      # USER INSTRUCTION
-      # -------------------------------------------------------------
-
-      if user_prompt:
-          prompt += f"""
-
-  ========================================================
-  USER DESIGN REQUEST
-  ========================================================
-
-  {user_prompt}
-
-  Follow this request while preserving:
-  - required fields
-  - company branding
-  - card dimensions
-  - readability
-  - reference-image inspiration
-  """
-
-      # -------------------------------------------------------------
-      # EXTRA VARIANT INSTRUCTION
-      # -------------------------------------------------------------
-
-      if extra_instruction:
-          prompt += f"""
-
-  ========================================================
-  VARIANT-SPECIFIC INSTRUCTION
-  ========================================================
-
-  {extra_instruction}
-
-  IMPORTANT:
-
-  The variant-specific instruction has priority for
-  composition.
-
-  However, NEVER remove required placeholder tokens.
-  """
-
-      # -------------------------------------------------------------
-      # PREVIOUS HTML
-      # -------------------------------------------------------------
-
-      if previous_html:
-          prompt += f"""
-
-  ========================================================
-  PREVIOUS TEMPLATE
-  ========================================================
-
-  {previous_html}
-
-  Modify the previous template according to the new
-  instruction.
-
-  Return the COMPLETE HTML document.
-
-  Do NOT return only the changed section.
-  """
-
-      # -------------------------------------------------------------
-      # HARD OUTPUT REQUIREMENTS
-      # -------------------------------------------------------------
-
-      prompt += """
-
-  ========================================================
-  FINAL OUTPUT REQUIREMENTS
-  ========================================================
-
-  Before returning the HTML, verify all of the following:
-
-  1. The card contains EVERY required placeholder.
-
-  2. Never replace a placeholder with fake data.
-
-  3. Never remove a placeholder.
-
-  4. The card must actually use the available canvas.
-
-  5. Do not create a giant empty content area.
-
-  6. The card must have a strong visual hierarchy.
-
-  7. The card must look intentionally designed.
-
-  8. The card must have visible content in the middle
-    and lower areas.
-
-  9. The photo must be compact.
-
-  10. The QR code must be intentionally positioned.
-
-  11. The company is the issuer/brand.
-
-  12. The person/member/patient/visitor is the
-      primary identity.
-
-  13. Return COMPLETE HTML.
-
-  14. Return ONLY HTML.
-
-  15. No markdown.
-
-  16. No explanation.
-
-  17. No ```html fences.
-
-  18. Keep every placeholder EXACTLY as:
-      {{field_name}}
-
-  19. Do not invent any data fields beyond the required tokens listed above.
-
-  20. Do not omit fields.
-  """
-
-      # -------------------------------------------------------------
-      # NO API KEY
-      # -------------------------------------------------------------
-
-      if not api_key:
-          if provider == "gemini" and not reference_image_url:
-              return render_mock_card_template(
-                  company,
-                  brand,
-                  category,
-                  design_direction=design_direction,
-              )
-          if reference_image_url and provider == "gemini":
-              raise RuntimeError(
-                  "Reference image generation requires GEMINI_API_KEY. "
-                  "Configure the image generation service and try again."
-              )
-          # Let generate_text raise an actionable missing-key error.
-          return generate_text(prompt, image_data_uri=reference_image_url)
-
-      html = _call_provider_with_retry(prompt, image_data_uri=reference_image_url)
-
-      html = html.strip()
-
-      # Remove markdown fences if Gemini adds them.
-      html = re.sub(
-          r"^```html\s*",
-          "",
-          html,
-          flags=re.IGNORECASE,
-      )
-
-      html = re.sub(
-          r"^```\s*",
-          "",
-          html,
-      )
-
-      html = re.sub(
-          r"\s*```$",
-          "",
-          html,
-      )
-
-      html = html.strip()
-
-      return html
+    """
+    Generate (or revise) one reusable card template.
+
+    The generated HTML contains {{placeholder}} tokens.
+    Those tokens are replaced only when rendering the preview
+    or creating a real card.
+    """
+    _, provider, api_key, _ = get_provider_config()
+
+    if previous_html:
+        # Edit: send only the instruction, required tokens and the card itself
+        # (without our injected sizing styles) instead of the whole design brief.
+        width, height = _card_dimensions(category)
+        tokens = ", ".join(
+            card_placeholder(field) for field in card_fields_for_category(category, company)
+        )
+        prompt = (
+            f"Revise this card template. Instruction: {extra_instruction or 'improve the design'}\n"
+            f"Keep every token ({tokens}) exactly as written, the {width}x{height}px canvas "
+            "and the brand colours unless the instruction says otherwise. Keep CSS compact. "
+            "Return the complete revised HTML only, no markdown.\n\n"
+            f"{strip_card_size_overrides(previous_html)}"
+        )
+    else:
+        direction = next(
+            (d for d in CARD_DESIGN_DIRECTIONS if d["key"] == design_direction), None
+        )
+        concept = (
+            f"{direction['label']}: {direction['instruction']}" if direction else design_direction
+        )
+        if extra_instruction:
+            concept = f"{concept}. {extra_instruction}" if concept else extra_instruction
+        if _mock_allowed(provider, api_key, reference_image_url):
+            return render_mock_card_template(
+                company, brand, category, design_direction=design_direction
+            )
+        prompt = build_template_prompt(
+            company,
+            brand,
+            category,
+            user_prompt=user_prompt,
+            has_reference_image=bool(reference_image_url),
+            design_direction=concept,
+        )
+
+    _raise_for_missing_key(provider, api_key, reference_image_url)
+    html = _call_provider_with_retry(
+        prompt, image_data_uri=reference_image_url, max_tokens=_card_token_budget(1)
+    )
+    return _strip_fences(html)
+
+
+def repair_missing_fields(template_html, required_fields):
+    """Add any placeholder the model forgot into the card instead of
+    discarding an otherwise good design (and paying for a regeneration)."""
+    if not isinstance(template_html, str) or not template_html.strip():
+        return template_html
+    missing = [f for f in required_fields if card_placeholder(f) not in template_html]
+    # Patch a few omissions only; a design missing most fields is not worth saving.
+    if not missing or len(missing) > max(2, len(required_fields) // 3):
+        return template_html
+
+    soup = BeautifulSoup(template_html, "lxml")
+    body = soup.body
+    if body is None or not soup.find("style"):
+        return template_html
+    root = body.find(["main", "article", "section"]) or body.find(
+        "div", class_=re.compile(r"\bcard\b", re.IGNORECASE)
+    )
+    if root is None:
+        return template_html
+
+    parts = []
+    for field in missing:
+        token = card_placeholder(field)
+        if field == "photo":
+            parts.append(f'<img class="mc-extra-photo" src="{token}" alt="Photo">')
+        elif field == "qr_code":
+            parts.append(f'<img class="mc-extra-qr" src="{token}" alt="QR code">')
+        else:
+            parts.append(
+                f'<span class="mc-extra-item"><b>{escape(_field_label(field))}</b> {token}</span>'
+            )
+    extra = BeautifulSoup(f'<div class="mc-extra">{"".join(parts)}</div>', "html.parser")
+    root.append(extra)
+
+    style = soup.new_tag("style")
+    style.string = (
+        ".mc-extra{position:absolute;left:12px;right:12px;bottom:8px;display:flex;flex-wrap:wrap;"
+        "align-items:center;gap:4px 10px;font-size:9px;line-height:1.3;opacity:.9;z-index:2}"
+        ".mc-extra b{font-weight:700;opacity:.7;margin-right:3px}"
+        ".mc-extra-photo{width:34px;height:42px;object-fit:cover;border-radius:4px}"
+        ".mc-extra-qr{width:40px;height:40px;background:#fff;padding:3px;border-radius:4px}"
+    )
+    (soup.head or soup).append(style)
+    return str(soup)
 
 
 def encode_uploaded_image_to_data_uri(uploaded_file) -> str:
@@ -883,16 +853,7 @@ def ensure_card_styling(template_html: str, category=None) -> str:
     )
     has_style_block = any(style.get_text(strip=True) for style in soup.find_all("style"))
 
-    width = 480
-    height = 300
-    ratio = getattr(category, "default_aspect_ratio", None)
-    if ratio:
-        try:
-            ratio_width, ratio_height = (float(part) for part in ratio.split(":"))
-            if ratio_width > 0 and ratio_height > 0:
-                height = round(width * ratio_height / ratio_width)
-        except (ValueError, TypeError):
-            pass
+    width, height = _card_dimensions(category)
 
     head = soup.head
     if head is None:
@@ -903,7 +864,10 @@ def ensure_card_styling(template_html: str, category=None) -> str:
         body.insert_before(head)
 
     if has_style_block or has_inline_card_style:
-        size_override = soup.new_tag("style")
+        # Drop overrides from earlier passes so they never accumulate.
+        for previous in soup.find_all("style", attrs={CARD_SIZE_STYLE_ATTR: True}):
+            previous.decompose()
+        size_override = soup.new_tag("style", attrs={CARD_SIZE_STYLE_ATTR: "1"})
         size_override.string = f"""
           html, body {{
             box-sizing: border-box !important;

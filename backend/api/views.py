@@ -1,5 +1,6 @@
 # api/views.py
 
+import logging
 import uuid
 from django.core import signing
 from django.db import transaction
@@ -15,8 +16,12 @@ from .audit import apply_request_audit, get_request_ip, request_audit_values
 from .models import User, Company, CompanyBrandPreference, Card, CardCategory
 from .serializers import UserSerializer, CompanySerializer, CardSerializer
 from .services.extraction import run_full_extraction
+from django.conf import settings
 from .services.card_generation import (
     CARD_DESIGN_DIRECTIONS,
+    generate_card_variants,
+    pick_design_directions,
+    repair_missing_fields,
     encode_uploaded_image_to_data_uri,
     ensure_card_styling,
     generate_card_template,
@@ -39,6 +44,23 @@ class RequestAuditViewSetMixin:
 class UserViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
     queryset = User.objects.all().select_related('role')
     serializer_class = UserSerializer
+
+
+BRAND_FIELDS = (
+    "logo_url", "primary_color", "secondary_color", "accent_color",
+    "font_family", "brand_style",
+)
+
+
+def _merge_extraction_meta(company, extracted):
+    """Keep extra extracted details (other socials, extra phones/emails) in
+    meta_data — NOT payload, whose keys become card fields."""
+    meta = dict(company.meta_data or {})
+    meta["extraction"] = {
+        **(extracted.get("extras") or {}),
+        "source_url": extracted.get("source_url"),
+    }
+    company.meta_data = meta
 
 
 class CompanyViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
@@ -113,7 +135,8 @@ class CompanyViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
                 if value:
                     setattr(company, field, value)
             apply_request_audit(company, request, creating=False)
-            company.save()
+        _merge_extraction_meta(company, extracted)
+        company.save()
 
         self._save_brand_preference(company, brand)
 
@@ -129,14 +152,14 @@ class CompanyViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
             defaults={
                 **{
                     field: brand.get(field)
-                    for field in ("logo_url", "primary_color", "secondary_color", "accent_color")
+                    for field in BRAND_FIELDS
                     if brand.get(field)
                 },
                 **request_audit_values(self.request, creating=True),
             },
         )
         if not created:
-            for field in ("logo_url", "primary_color", "secondary_color", "accent_color"):
+            for field in BRAND_FIELDS:
                 value = brand.get(field)
                 if value:
                     setattr(preference, field, value)
@@ -176,6 +199,7 @@ class CompanyViewSet(RequestAuditViewSetMixin, viewsets.ModelViewSet):
         company.facebook_url = social.get("facebook_url") or company.facebook_url
         company.youtube_url = social.get("youtube_url") or company.youtube_url
         company.twitter_url = social.get("twitter_url") or company.twitter_url
+        _merge_extraction_meta(company, extracted)
         apply_request_audit(company, request, creating=False)
         company.save()
 
@@ -239,73 +263,65 @@ class CardViewSet(viewsets.ModelViewSet):
 
         variants = []
         generation_notice = None
-        quota_exhausted = False
         required_fields = card_fields_for_category(generation_category, company)
+        directions = pick_design_directions(variant_count, generation_category)
+        per_call = getattr(settings, "AI_CARD_VARIANTS_PER_CALL", 3)
 
-        for index in range(variant_count):
-            design = CARD_DESIGN_DIRECTIONS[index % len(CARD_DESIGN_DIRECTIONS)]
-            fallback_direction = design["key"]
-
-            if quota_exhausted:
-                html = render_mock_card_template(
-                    company, brand, generation_category, fallback_direction
+        # One AI request per batch of variants (not per variant): the design
+        # brief and reference image are sent once, which cuts tokens and
+        # request count — the main cause of quota/rate-limit exhaustion.
+        generated = []
+        for start in range(0, len(directions), per_call):
+            batch = directions[start:start + per_call]
+            try:
+                htmls = generate_card_variants(
+                    company=company,
+                    brand=brand,
+                    category=generation_category,
+                    directions=batch,
+                    user_prompt=user_prompt,
+                    reference_image_url=reference_image_url,
                 )
-            else:
-                if reference_image_url:
-                    direction = (
-                        "Use the attached card as the visual reference. Preserve its palette, "
-                        "composition, typography character, and element placement while "
-                        "replacing sample data with the required placeholders. Ignore "
-                        "screenshot frames and page margins."
-                    )
-                else:
-                    direction = f"Design direction: {design['label']}. {design['instruction']}"
-                instruction = (
-                    f"Create option {index + 1} of {variant_count}. {direction} "
-                    f"Use a {orientation} layout. Return only the finished card HTML."
+            except Exception as exc:
+                error_text = str(exc)
+                is_quota_error = (
+                    getattr(exc, "status_code", None) == 429
+                    or "429" in error_text
+                    or "RESOURCE_EXHAUSTED" in error_text.upper()
+                    or "RATE_LIMIT" in error_text.upper()
                 )
-                try:
-                    html = generate_card_template(
-                        company=company,
-                        brand=brand,
-                        category=generation_category,
-                        extra_instruction=instruction,
-                        user_prompt=user_prompt,
-                        reference_image_url=reference_image_url,
-                        # The direction is already included above. Avoid appending
-                        # the service's long duplicate direction block.
-                        design_direction=None,
-                    )
-                except Exception as exc:
-                    error_text = str(exc)
-                    is_quota_error = (
-                        getattr(exc, "status_code", None) == 429
-                        or "429" in error_text
-                        or "RESOURCE_EXHAUSTED" in error_text.upper()
-                        or "RATE_LIMIT" in error_text.upper()
-                    )
-                    if not is_quota_error:
+                logging.getLogger(__name__).warning(
+                    "Card generation batch starting at variant %s failed: %s",
+                    start + 1,
+                    error_text,
+                )
+                if not generated:
+                    if is_quota_error:
                         return Response(
-                            {"error": f"Card generation failed: {error_text}"},
-                            status=status.HTTP_502_BAD_GATEWAY,
+                            {"error": (
+                                "The AI provider rejected this request with a quota or "
+                                "rate-limit error. Try again shortly or generate fewer "
+                                "variants; the backend log has the provider's details."
+                            )},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS,
                         )
-                    quota_exhausted = True
-                    generation_notice = (
-                        "Gemini's request limit has been reached. This and the remaining "
-                        "options use local designs; try AI generation again after the "
-                        "limit resets."
+                    return Response(
+                        {"error": f"Card generation failed: {error_text}"},
+                        status=status.HTTP_502_BAD_GATEWAY,
                     )
-                    html = render_mock_card_template(
-                        company, brand, generation_category, fallback_direction
-                    )
+                generation_notice = (
+                    f"Only {len(generated)} of {variant_count} variants could be generated "
+                    "because the AI provider returned an error"
+                    + (" (quota or rate limit)." if is_quota_error else ".")
+                )
+                break
+            generated.extend(zip(batch, htmls))
 
-            missing_fields = [
-                field for field in required_fields
-                if card_placeholder(field) not in html
-            ]
-            if missing_fields or not is_renderable_card_template(html, required_fields):
+        for index, (design, html) in enumerate(generated):
+            html = repair_missing_fields(html, required_fields)
+            if not html or not is_renderable_card_template(html, required_fields):
                 html = render_mock_card_template(
-                    company, brand, generation_category, fallback_direction
+                    company, brand, generation_category, design["key"]
                 )
 
             html = ensure_card_styling(html, generation_category)
@@ -316,6 +332,7 @@ class CardViewSet(viewsets.ModelViewSet):
                 "name": variant_name,
                 "html_content": html,
                 "orientation": orientation,
+                "design_key": design["key"],
             })
             variants.append({
                 "id": f"variant-{uuid.uuid4().hex}",
@@ -326,7 +343,7 @@ class CardViewSet(viewsets.ModelViewSet):
                 "preview_html": render_preview_html(html, generation_category, company),
                 "orientation": orientation,
                 "aspect_ratio": generation_category.default_aspect_ratio,
-                "design_key": fallback_direction,
+                "design_key": design["key"],
                 "design_label": design["label"],
             })
 
@@ -371,16 +388,27 @@ class CardViewSet(viewsets.ModelViewSet):
         instruction = (request.data.get("instruction") or "").strip()
         if not instruction:
             return Response({"error": "instruction is required."}, status=status.HTTP_400_BAD_REQUEST)
+        metadata = card.meta_data if isinstance(card.meta_data, dict) else {}
+        category = category_for_card_orientation(card.category, metadata.get("orientation"))
         try:
             html = generate_card_template(
                 card.company,
                 getattr(card.company, "brand_preference", None),
-                card.category,
+                category,
                 extra_instruction=instruction,
                 previous_html=card.html_content,
             )
         except Exception as exc:
             return Response({"error": f"Edit failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+        required_fields = card_fields_for_category(category, card.company)
+        html = repair_missing_fields(html, required_fields)
+        if not is_renderable_card_template(html, required_fields):
+            # Keep the existing card rather than saving a broken edit.
+            return Response(
+                {"error": "The AI returned an incomplete design. The card was not changed."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        html = ensure_card_styling(html, category)
         card.html_content = html
         card.save(update_fields=["html_content"])
         return Response(self.get_serializer(card).data, status=status.HTTP_200_OK)
@@ -388,22 +416,34 @@ class CardViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="regenerate")
     def regenerate(self, request, pk=None):
         card = self.get_object()
+        metadata = card.meta_data if isinstance(card.meta_data, dict) else {}
+        category = category_for_card_orientation(card.category, metadata.get("orientation"))
+        previous_key = metadata.get("design_key")
+        direction = next(
+            d for d in pick_design_directions(len(CARD_DESIGN_DIRECTIONS), category)
+            if d["key"] != previous_key
+        )
         try:
+            # A fresh design does not need the old HTML in the prompt.
             html = generate_card_template(
                 card.company,
                 getattr(card.company, "brand_preference", None),
-                card.category,
-                extra_instruction=(
-                    "Create a substantially different professional card design. "
-                    "Change its composition, layout, element placement, typography, "
-                    "and decorative treatment. Do not simply recolor it."
-                ),
-                previous_html=card.html_content,
+                category,
+                design_direction=direction["key"],
             )
         except Exception as exc:
             return Response({"error": f"Regeneration failed: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+        required_fields = card_fields_for_category(category, card.company)
+        html = repair_missing_fields(html, required_fields)
+        if not is_renderable_card_template(html, required_fields):
+            return Response(
+                {"error": "The AI returned an incomplete design. Please try again."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        html = ensure_card_styling(html, category)
+        card.meta_data = {**metadata, "design_key": direction["key"]}
         card.html_content = html
-        card.save(update_fields=["html_content"])
+        card.save(update_fields=["html_content", "meta_data"])
         return Response(self.get_serializer(card).data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="save-generated")
@@ -474,6 +514,7 @@ class CardViewSet(viewsets.ModelViewSet):
                 public_slug=f"{slugify(name)}-{uuid.uuid4().hex[:8]}",
                 meta_data={
                     "orientation": preview.get("orientation", "horizontal"),
+                    "design_key": preview.get("design_key"),
                     "aspect_ratio": (
                         "1:1.6"
                         if preview.get("orientation") == "vertical"

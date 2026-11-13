@@ -5,7 +5,16 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from .models import Card, CardCategory, Company, CompanyBrandPreference, Role
-from .services.card_generation import render_mock_card_template, render_preview_html
+from .services.card_generation import (
+	build_template_prompt,
+	pick_design_directions,
+	render_mock_card_template,
+	render_preview_html,
+	repair_missing_fields,
+	split_generated_cards,
+	strip_card_size_overrides,
+	ensure_card_styling,
+)
 from .services.extraction import (
 	extract_brand_colors,
 	extract_company_name,
@@ -171,10 +180,20 @@ class GeneratedCardSelectionTests(TestCase):
 			"name": "ID Card",
 			"variant_count": 2,
 		}
+		def designed(label):
+			# Valid template that deliberately omits {{email}} to exercise repair.
+			return (
+				"<html><head><style>.card{width:480px;height:300px}</style></head><body>"
+				f"<main class='card'><h1>{{{{full_name}}}}</h1><p>{label}</p>"
+				"<img src='{{photo_url}}'><img src='{{qr_code_url}}'>"
+				"<span>{{company_name}}</span><span>{{phone}}</span><span>{{job_title}}</span>"
+				"</main></body></html>"
+			)
+
 		with patch(
-			"api.views.generate_card_template",
-			side_effect=["<main>First option</main>", "<main>Second option</main>"],
-		) as generate_template:
+			"api.views.generate_card_variants",
+			return_value=[designed("First option"), designed("Second option")],
+		) as generate_variants:
 			response = self.client.post(
 				"/api/cards/generate/",
 				data=json.dumps(generation_data),
@@ -184,10 +203,10 @@ class GeneratedCardSelectionTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		variants = response.json()["variants"]
 		self.assertEqual(len(variants), 2)
-		self.assertEqual(
-			len({call.kwargs["design_direction"] for call in generate_template.call_args_list}),
-			2,
-		)
+		# Both variants come from ONE batched AI request.
+		self.assertEqual(generate_variants.call_count, 1)
+		self.assertEqual(len({v["design_key"] for v in variants}), 2)
+		self.assertIn("{{email}}", variants[0]["html_content"])
 		self.assertEqual(Card.objects.count(), 1)
 
 		save_response = self.client.post(
@@ -209,7 +228,7 @@ class GeneratedCardSelectionTests(TestCase):
 		self.assertIn("Second option", saved_cards[1].html_content)
 		for saved_card in saved_cards:
 			with self.subTest(card=saved_card.name):
-				self.assertIn("generated-card-fallback", saved_card.html_content)
+				self.assertIn("mc-extra", saved_card.html_content)
 				self.assertTrue(saved_card.is_active)
 		previous_card.refresh_from_db()
 		self.assertFalse(previous_card.is_active)
@@ -231,8 +250,8 @@ class GeneratedCardSelectionTests(TestCase):
 			"orientation": "vertical",
 		}
 		with patch(
-			"api.views.generate_card_template",
-			return_value="<html><head><style>.card { width: 480px; height: 300px; }</style></head><body><main class='card'>Vertical</main></body></html>",
+			"api.views.generate_card_variants",
+			return_value=["<html><head><style>.card { width: 480px; height: 300px; }</style></head><body><main class='card'>Vertical</main></body></html>"],
 		) as generate_template:
 			response = self.client.post(
 				"/api/cards/generate/",
@@ -389,3 +408,60 @@ class CompanyNameExtractionTests(TestCase):
 		self.assertEqual(colors["primary_color"], "#123456")
 		self.assertEqual(colors["secondary_color"], "#334455")
 		self.assertEqual(colors["accent_color"], "#f0a020")
+
+
+class CardPromptEfficiencyTests(TestCase):
+	def setUp(self):
+		user = get_user_model().objects.create_user(username="prompt-user", password="x-Password-123")
+		self.company = Company.objects.create(
+			user=user, website_url="https://acme.example", company_name="Acme",
+		)
+		self.brand = CompanyBrandPreference.objects.create(
+			company=self.company, primary_color="#e63946", font_family="Poppins",
+		)
+		self.category = CardCategory.objects.create(
+			name="Digital Health Card", slug="digital_health_card",
+			required_fields=["patient_name", "patient_id", "blood_group", "emergency_contact", "qr_code"],
+		)
+
+	def test_batched_prompt_includes_every_field_and_category_hints_once(self):
+		directions = pick_design_directions(3, self.category)
+		prompt = build_template_prompt(
+			self.company, self.brand, self.category,
+			concepts=[d["instruction"] for d in directions],
+		)
+		for token in ("{{patient_name}}", "{{patient_id}}", "{{blood_group}}",
+					  "{{emergency_contact}}", "{{qr_code_url}}", "{{photo_url}}", "{{email}}"):
+			self.assertIn(token, prompt)
+		self.assertIn("blood group as a high-contrast badge", prompt)
+		self.assertIn("Poppins", prompt)
+		self.assertIn("<!--CARD n-->", prompt)
+		# Far smaller than the old ~10k-character per-variant brief.
+		self.assertLess(len(prompt), 3500)
+
+	def test_design_directions_are_distinct_and_category_aware(self):
+		directions = pick_design_directions(3, self.category)
+		self.assertEqual(len({d["key"] for d in directions}), 3)
+		self.assertEqual({d["key"] for d in directions}, {"minimal", "tech", "editorial"})
+
+	def test_multi_card_response_is_split_per_marker(self):
+		raw = "```html\n<!--CARD 1-->\n<html><body><main>A</main></body></html>\n<!--CARD 2-->\n<html><body><main>B</main></body></html>\n```"
+		first, second, third = split_generated_cards(raw, 3)
+		self.assertIn(">A<", first)
+		self.assertIn(">B<", second)
+		self.assertIsNone(third)
+
+	def test_missing_fields_are_repaired_not_discarded(self):
+		html = "<html><head><style>.card{}</style></head><body><main class='card'>{{full_name}}</main></body></html>"
+		repaired = repair_missing_fields(html, ["full_name", "blood_group", "qr_code"])
+		self.assertIn("{{blood_group}}", repaired)
+		self.assertIn("{{qr_code_url}}", repaired)
+
+	def test_size_overrides_are_stripped_before_edits(self):
+		styled = ensure_card_styling(
+			"<html><head><style>.card{color:red}</style></head><body><main class='card'>x</main></body></html>",
+			self.category,
+		)
+		styled = ensure_card_styling(styled, self.category)
+		self.assertEqual(styled.count("data-card-size"), 1)
+		self.assertNotIn("!important", strip_card_size_overrides(styled))
